@@ -1,0 +1,4 @@
+The format of the sample ID is GTEX-[donor ID]-[tissue site ID]-SM-[aliquot ID]. 
+
+10.20
+Selected all human SLCs from RNA seq dataframe with filter.py 
