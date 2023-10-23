@@ -1,0 +1,26 @@
+---
+title: "DGE analysis of SLCs"
+output: 
+  html_document: 
+    df_print: paged
+---
+```{r}
+# load count data
+library(tidyverse)
+counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
+
+# create a sub-dataset
+subcounts.data <- counts.data[,-1][,1:10]
+# check count data of first 10 sample in graph
+subcounts.data %>% pivot_longer(colnames(subcounts.data[,-1]), names_to="sample", values_to="value") %>% ggplot(aes(x=value)) +
+  facet_wrap("sample") +
+  geom_histogram()
+
+# check count data of first 10 sample in graph after transformation by log10
+subcounts.data %>% pivot_longer(colnames(subcounts.data[,-1]), names_to="sample", values_to="value") %>% 
+  ggplot(aes(x=value)) +
+  scale_x_log10() +
+  facet_wrap("sample") +
+  geom_histogram()
+```
+
