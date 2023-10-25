@@ -7,20 +7,70 @@ output:
 ```{r}
 # load count data
 library(tidyverse)
+library(edgeR)
 counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
+counts.data <- counts.data[,-1]
 
 # create a sub-dataset
-subcounts.data <- counts.data[,-1][,1:10]
+subcounts.data <- counts.data[,1:10]
 # check count data of first 10 sample in graph
-subcounts.data %>% pivot_longer(colnames(subcounts.data[,-1]), names_to="sample", values_to="value") %>% ggplot(aes(x=value)) +
-  facet_wrap("sample") +
-  geom_histogram()
+subcounts.data %>% 
+  pivot_longer(colnames(subcounts.data[,-1]), names_to="sample", values_to="value") %>% 
+    ggplot(aes(x=value)) +
+    facet_wrap("sample") +
+    geom_histogram()
 
-# check count data of first 10 sample in graph after transformation by log10
-subcounts.data %>% pivot_longer(colnames(subcounts.data[,-1]), names_to="sample", values_to="value") %>% 
+# check if count data of first 10 sample normally distributed after transformation by log10
+subcounts.data %>% 
+  pivot_longer(colnames(subcounts.data[,-1]), names_to="sample", values_to="value") %>% 
   ggplot(aes(x=value)) +
   scale_x_log10() +
   facet_wrap("sample") +
   geom_histogram()
+
+#counts.data <- counts.data[rowSums(counts.data[,-1] > 10) >= 3,]
+# no need to select because all SLCs gene are with some expression
+
+
+
+
+# retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should count all the data
+tissue1 <- select(counts.data, matches(".+0126.+"))
+tissue2 <- select(counts.data, matches(".+0326.+"))
+
+# following 3 commands do the same thing in different way
+#result <- counts.data %>% select(all_of(pull(sample.description, 'sample')))
+#counts.data %>% select(pull(sample.description, 'sample'))
+#counts.data[,unlist(sample.description)]
+
+tissue1.id <- tissue1 %>% 
+  colnames() %>% 
+  str_remove("-0126.+") %>%
+  tibble(id=.)
+
+tissue2.id <- tissue2 %>% 
+  colnames() %>% 
+  str_remove("-0326.+") %>%
+  tibble(id=.)
+
+ids <- tissue1.id %>% 
+  inner_join(tissue2.id, by='id') %>% 
+  pull() %>% 
+  paste(collapse="|")
+
+
+selected.counts <- tissue1 %>% 
+  select(matches(ids)) %>% 
+  mutate(select(tissue2, matches(ids))) %>%
+  mutate(counts.data[1]) %>% 
+  select('Description', everything())
+  
+
+# create a tibble for edgeR description
+sample.description <- tibble(sample=colnames(selected.counts[-1]))
+sample.description <- sample.description %>%
+  mutate(tissue=str_extract(sample, "0126|0326"), 
+         donor=str_extract(sample, "(?<=GTEX-).+(?=-0126)|(?<=GTEX-).+(?=-0326)")) %>%
+  mutate(group=paste(tissue, donor, sep="_"))
 ```
 
