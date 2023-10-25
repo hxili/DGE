@@ -17,7 +17,7 @@ counts.data <- counts.data[,-1]
 
 # create a sub-data set
 #counts.data.copy <- counts.data
-counts.data <- counts.data.copy
+#counts.data <- counts.data.copy
 #subcounts.data <- counts.data[,1:10]
 # check count data of first 10 sample in graph
 #subcounts.data %>% 
@@ -54,11 +54,11 @@ tiss2.sampid <- samp.anno.data %>%
 ### Take only several samples for plotting
 
 
-#ids <- tiss1.sampid[1:10,] %>% 
-#  bind_rows(tiss2.sampid[1:10,]) %>% 
-#  add_row(SAMPID='Description') %>% 
-#  pull() %>% 
-#  paste(collapse="|")
+ids <- tiss1.sampid[1:10,] %>% 
+  bind_rows(tiss2.sampid[1:10,]) %>% 
+  add_row(SAMPID='Description') %>% 
+  pull() %>% 
+  paste(collapse="|")
 ### End here
 
 ids <- tiss1.sampid %>% 
@@ -118,7 +118,7 @@ color_info <- sample.description[,1:2] %>%
 
 matched_colors <- color_info$color[match(colnames(dge.data), color_info$SAMPID)]
 
-plotMDS(dge.data, method = "bcv", pch=16, col=matched_colors)
+plotMDS(dge.data, method = "logFC", pch=16, col=matched_colors)
 
 
 ### To investigate why there's sightly variance with testis group
