@@ -5,7 +5,7 @@ output:
     df_print: paged
 ---
 ```{r}
-# load count data
+# Load count data
 library(tidyverse)
 library(stringr)
 library(dplyr)
@@ -16,7 +16,8 @@ subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhen
 counts.data <- counts.data[,-1]
 
 # create a sub-data set
-counts.data.copy <- counts.data
+#counts.data.copy <- counts.data
+counts.data <- counts.data.copy
 #subcounts.data <- counts.data[,1:10]
 # check count data of first 10 sample in graph
 #subcounts.data %>% 
@@ -25,7 +26,7 @@ counts.data.copy <- counts.data
 #    facet_wrap("sample") +
 #    geom_histogram()
 
-# check if count data of first 10 sample normally distributed after transformation by log10
+# Check if count data of first 10 sample normally distributed after transformation by log10
 #subcounts.data %>% 
 #  pivot_longer(colnames(subcounts.data[,-1]), names_to="sample", values_to="value") %>% 
 #  ggplot(aes(x=value)) +
@@ -34,12 +35,12 @@ counts.data.copy <- counts.data
 #  geom_histogram()
 
 #counts.data <- counts.data[rowSums(counts.data[,-1] > 10) >= 3,]
-# no need to select because all SLCs gene are with some expression
+# No need to select because all SLCs gene are with some expression
 
 
 
 
-# retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should count all the data
+# Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should count all the data
 tiss1.sampid <- samp.anno.data %>% 
   filter(SMTS=='Ovary') %>% 
   select(SAMPID)
@@ -48,16 +49,35 @@ tiss2.sampid <- samp.anno.data %>%
   filter(SMTS=='Testis') %>% 
   select(SAMPID)
 
+
+
+### Take only several samples for plotting
+
+
+#ids <- tiss1.sampid[1:10,] %>% 
+#  bind_rows(tiss2.sampid[1:10,]) %>% 
+#  add_row(SAMPID='Description') %>% 
+#  pull() %>% 
+#  paste(collapse="|")
+### End here
+
 ids <- tiss1.sampid %>% 
   bind_rows(tiss2.sampid) %>% 
   add_row(SAMPID='Description') %>% 
   pull() %>% 
   paste(collapse="|")
 
+
+
+
+
+
+
+
 counts.data <- counts.data %>% 
   select(matches(ids))
 
-# create a tibble for edgeR description
+# Create a tibble for edgeR description
 tiss1.sampid <- tiss1.sampid %>% 
   mutate(TS='Ovary')
 
@@ -77,38 +97,37 @@ sample.description <- sample.description %>%
          AGE=factor(AGE,levels = c("20-29","30-39","40-49","50-59","60-69","70-79")),
          DTHHRDY=factor(DTHHRDY,levels = c(0,1,2,3,4))) # setting the levels in this way makes "Testis" the reference  
 
+# Calculate normalization factors
 counts.matrix <- counts.data %>% select(-Description) %>% as.matrix()
 rownames(counts.matrix) <- counts.data$Description
 
-
-
-
-
-
-### To find out missing Samples in counts.data
-tb <- tibble(SAMPID=colnames(counts.matrix)) %>%
-  mutate(E=1)
-
-tb <- sample.description %>%
-  left_join(tb)
-
-counts.data.copy.name <- tibble(colnames(counts.data.copy))
-###
-
-
-
-
-
-
-
-
+sample.description <- tibble(SAMPID=colnames(counts.matrix)) %>%
+  left_join(sample.description)
+#
 
 dge.data <- DGEList(counts=counts.matrix, 
                     group=sample.description$group)
-#dim(dge.data) 
+ 
 dge.data <- calcNormFactors(dge.data, method = "TMM")
 dge.data$samples
 
-plotMDS(dge.data, method = "bcv")
+# Make a plot of the Biological Coefficient of Variation of each sample
+color_info <- sample.description[,1:2] %>% 
+  mutate(color=ifelse(TS=="Testis","darkred","lightgreen")) %>% 
+  select(-TS)
+
+matched_colors <- color_info$color[match(colnames(dge.data), color_info$SAMPID)]
+
+plotMDS(dge.data, method = "bcv", pch=16, col=matched_colors)
+
+
+### To investigate why there's sightly variance with testis group
+#diff <- sample.description %>% 
+#  filter(SEX==1) %>% 
+#  left_join(samp.anno.data)
+
+
+
+
 ```
 
