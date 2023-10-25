@@ -30,6 +30,6 @@ with open(arg.f2) as f:
 		id = line.split('	')[0].split('.')[0].strip("\"")
 		if id in ids:
 			o.write(line)
-			ids.remove(id)
+#			ids.remove(id)
 
 o.close()
