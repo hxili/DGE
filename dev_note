@@ -2,3 +2,11 @@ The format of the sample ID is GTEX-[donor ID]-[tissue site ID]-SM-[aliquot ID].
 
 10.20
 Selected all human SLCs from RNA seq dataframe with filter.py 
+
+10.22
+We first focus on differential expression pattern between 2 tissue, the ID of 
+which are 0126 and 0326
+
+10.24
+Don't know why, but it seems that the [tissue site ID] is not specific to a 
+tissue. We now test Ovary and Testis so there's only one gender in each group.
