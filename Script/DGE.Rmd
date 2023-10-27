@@ -54,11 +54,11 @@ tiss2.sampid <- samp.anno.data %>%
 ### Take only several samples for plotting
 
 
-ids <- tiss1.sampid[1:10,] %>% 
-  bind_rows(tiss2.sampid[1:10,]) %>% 
-  add_row(SAMPID='Description') %>% 
-  pull() %>% 
-  paste(collapse="|")
+#ids <- tiss1.sampid[1:10,] %>% 
+#  bind_rows(tiss2.sampid[1:10,]) %>% 
+#  add_row(SAMPID='Description') %>% 
+#  pull() %>% 
+#  paste(collapse="|")
 ### End here
 
 ids <- tiss1.sampid %>% 
@@ -126,8 +126,54 @@ plotMDS(dge.data, method = "logFC", pch=16, col=matched_colors)
 #  filter(SEX==1) %>% 
 #  left_join(samp.anno.data)
 
+# Normalization and check the effect of normalization
+counts.data.normal <- cpm(dge.data) 
+
+# or log2 transformed:
+counts.data.normal.log <- cpm(dge.data,log = TRUE)
+
+counts.data.log <- log2(counts.data[,-1] + 1)
+
+counts.data.log.pvt <- counts.data.log[,sample(ncol(counts.data.log), 6)]
+
+counts.data.log.pvt <- counts.data.log.pvt %>% pivot_longer(colnames(counts.data.log.pvt), names_to="sample", values_to="value")
+counts.data.log.pvt %>% ggplot(aes(x=sample, y=value)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45))
+
+counts.data.normal.log.pvt <- data.frame(counts.data.normal.log)[,sample(ncol(counts.data.normal.log), 6)]
+  
+
+counts.data.normal.log.pvt <- counts.data.normal.log.pvt %>% pivot_longer(colnames(counts.data.normal.log.pvt), names_to="sample", values_to="value")
+counts.data.normal.log.pvt %>% ggplot(aes(x=sample, y=value)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45))
 
 
+# Calculate dispersion factors
+design <- model.matrix(~TS,data = sample.description)
+rownames(design) <- sample.description$SAMPID
 
+#First the overall dispersion
+dge.data <- estimateGLMCommonDisp(dge.data,design,verbose = TRUE)
+
+#Then a trended dispersion based on count level
+dge.data <- estimateGLMTrendedDisp(dge.data,design)
+
+#And lastly we calculate the gene-wise dispersion, using the prior estimates to "squeeze" the dispersion towards the common dispersion.
+dge.data <- estimateGLMTagwiseDisp(dge.data,design)
+
+#We can examine this with a plot
+plotBCV(dge.data)
+
+# Find differentially expressed genes
+
+fit <- glmFit(dge.data, design)
+
+gt.lrt <- glmLRT(fit,coef = "TSOvary")
+
+topTags(gt.lrt)
+
+summary(decideTestsDGE(gt.lrt,p.value=0.01))
 ```
 
