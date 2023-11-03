@@ -4,44 +4,33 @@ output:
   html_document: 
     df_print: paged
 ---
+
 ```{r}
-# Load count data
 library(tidyverse)
 library(stringr)
 library(dplyr)
 library(edgeR)
+```
+
+
+
+First we copy the [list of SLCs in mammalian genomes](https://esbl.nhlbi.nih.gov/Databases/SLC-list/) and convert gene IDs to ENSG IDs with tool on this [page](https://biit.cs.ut.ee/gprofiler/convert).Then we can select all SLCs in GTEx gene counts data file with `filter.py` in terminal.
+
+```{bash, eval=FALSE}
+python3 filter.py -f1 ../input/gProfiler_hsapiens_10-19-2023_8-37-11\ PM.csv -f2 ../input/bulk-gex_v8_rna-seq_GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_reads.gct -o ../Input/GTEx_SLCs_gene_reads.gct
+```
+
+
+```{r}
+# Load count data
 counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
 samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt")
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
 
-# create a sub-data set
-#counts.data.copy <- counts.data
-#counts.data <- counts.data.copy
-#subcounts.data <- counts.data[,1:10]
-# check count data of first 10 sample in graph
-#subcounts.data %>% 
-#  pivot_longer(colnames(subcounts.data[,-1]), names_to="sample", values_to="value") %>% 
-#    ggplot(aes(x=value)) +
-#    facet_wrap("sample") +
-#    geom_histogram()
 
-# Check if count data of first 10 sample normally distributed after transformation by log10
-#subcounts.data %>% 
-#  pivot_longer(colnames(subcounts.data[,-1]), names_to="sample", values_to="value") %>% 
-#  ggplot(aes(x=value)) +
-#  scale_x_log10() +
-#  facet_wrap("sample") +
-#  geom_histogram()
-
-#counts.data <- counts.data[rowSums(counts.data[,-1] > 10) >= 3,]
-# No need to select because all SLCs gene are with some expression
-
-
-
-
-# Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should count all the data
-tiss1.sampid <- samp.anno.data %>% 
+# Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should include all the data
+tiss1.sampid <- samp.anno.data %>%
   filter(SMTS=='Ovary') %>% 
   select(SAMPID)
 
@@ -50,29 +39,11 @@ tiss2.sampid <- samp.anno.data %>%
   select(SAMPID)
 
 
-
-### Take only several samples for plotting
-
-
-#ids <- tiss1.sampid[1:10,] %>% 
-#  bind_rows(tiss2.sampid[1:10,]) %>% 
-#  add_row(SAMPID='Description') %>% 
-#  pull() %>% 
-#  paste(collapse="|")
-### End here
-
 ids <- tiss1.sampid %>% 
   bind_rows(tiss2.sampid) %>% 
   add_row(SAMPID='Description') %>% 
   pull() %>% 
   paste(collapse="|")
-
-
-
-
-
-
-
 
 counts.data <- counts.data %>% 
   select(matches(ids))
@@ -83,7 +54,12 @@ tiss1.sampid <- tiss1.sampid %>%
 
 tiss2.sampid <- tiss2.sampid %>% 
   mutate(TS='Testis')
+```
 
+
+Before we can normalize the data we need to be able to tell edgeR which groups the samples belong to. Here group refers to the distinct sample types (i.e. combinations of tissue, age, death circumstance)
+
+```{r}
 sample.description <- tiss1.sampid %>% 
   bind_rows(tiss2.sampid) %>%
   mutate(SUBJID=str_extract(SAMPID, 'GTEX-.+(?=-.+-SM)')) %>%
@@ -95,15 +71,19 @@ sample.description <- sample.description %>%
   mutate(TS=factor(TS,levels = c("Testis","Ovary")),
          SEX=factor(SEX,levels = c(1,2)),
          AGE=factor(AGE,levels = c("20-29","30-39","40-49","50-59","60-69","70-79")),
-         DTHHRDY=factor(DTHHRDY,levels = c(0,1,2,3,4))) # setting the levels in this way makes "Testis" the reference  
+         DTHHRDY=factor(DTHHRDY,levels = c(0,1,2,3,4)))
 
-# Calculate normalization factors
+sample.description
+```
+
+Calculate normalization factors by TMM method while RPKM is poorly behaved statistically, and plot multidimensional scaling plot of distances between gene expression profiles by logFC methods instead of bcv due to the large quantity of samples
+
+```{r}
 counts.matrix <- counts.data %>% select(-Description) %>% as.matrix()
 rownames(counts.matrix) <- counts.data$Description
 
 sample.description <- tibble(SAMPID=colnames(counts.matrix)) %>%
   left_join(sample.description)
-#
 
 dge.data <- DGEList(counts=counts.matrix, 
                     group=sample.description$group)
@@ -119,14 +99,13 @@ color_info <- sample.description[,1:2] %>%
 matched_colors <- color_info$color[match(colnames(dge.data), color_info$SAMPID)]
 
 plotMDS(dge.data, method = "logFC", pch=16, col=matched_colors)
+```
 
+We can see samples are well divided into 2 clusters by tissue. This plot could convince us of the correctness of the experiment and data.
 
-### To investigate why there's sightly variance with testis group
-#diff <- sample.description %>% 
-#  filter(SEX==1) %>% 
-#  left_join(samp.anno.data)
+Randomly select 6 samples and plot them to check the effect of normalization
 
-# Normalization and check the effect of normalization
+```{r}
 counts.data.normal <- cpm(dge.data) 
 
 # or log2 transformed:
@@ -137,6 +116,7 @@ counts.data.log <- log2(counts.data[,-1] + 1)
 counts.data.log.pvt <- counts.data.log[,sample(ncol(counts.data.log), 6)]
 
 counts.data.log.pvt <- counts.data.log.pvt %>% pivot_longer(colnames(counts.data.log.pvt), names_to="sample", values_to="value")
+
 counts.data.log.pvt %>% ggplot(aes(x=sample, y=value)) +
   geom_boxplot() +
   theme(axis.text.x = element_text(angle = 45))
@@ -148,32 +128,44 @@ counts.data.normal.log.pvt <- counts.data.normal.log.pvt %>% pivot_longer(colnam
 counts.data.normal.log.pvt %>% ggplot(aes(x=sample, y=value)) +
   geom_boxplot() +
   theme(axis.text.x = element_text(angle = 45))
+```
 
 
-# Calculate dispersion factors
+Now calculate dispersion factors
+
+```{r}
 design <- model.matrix(~TS,data = sample.description)
 rownames(design) <- sample.description$SAMPID
 
-#First the overall dispersion
+# First the overall dispersion
 dge.data <- estimateGLMCommonDisp(dge.data,design,verbose = TRUE)
 
-#Then a trended dispersion based on count level
+# Then a trended dispersion based on count level
 dge.data <- estimateGLMTrendedDisp(dge.data,design)
 
-#And lastly we calculate the gene-wise dispersion, using the prior estimates to "squeeze" the dispersion towards the common dispersion.
+# And lastly we calculate the gene-wise dispersion, using the prior estimates to "squeeze" the dispersion towards the common dispersion.
 dge.data <- estimateGLMTagwiseDisp(dge.data,design)
+```
 
-#We can examine this with a plot
+
+Draw dispersion plot
+
+```{r}
 plotBCV(dge.data)
+```
 
-# Find differentially expressed genes
 
+Find genes that expressed differently in these 2 tissues
+
+```{r}
 fit <- glmFit(dge.data, design)
 
 gt.lrt <- glmLRT(fit,coef = "TSOvary")
 
+# Show top ten genes
 topTags(gt.lrt)
-
+# Summarize the number of differentially expressed genes
 summary(decideTestsDGE(gt.lrt,p.value=0.01))
 ```
+
 
