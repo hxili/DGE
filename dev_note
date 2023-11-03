@@ -12,9 +12,13 @@ Don't know why, but it seems that the [tissue site ID] is not specific to a
 tissue. We now test Ovary and Testis so there's only one gender in each group.
 
 10.26
-The top one differentially expressed gene SLC36A3 was reported to be restricted in Testis
+The top one differentially expressed gene SLC36A3 was reported to be restricted 
+in Testis
 Ref: DOI: 10.1007/s00335-003-2319-3
 
+10.27
+Drew a boxplot instead of violin plot for normalized counts as there are two many
+groups to show. Also drew a volcano plot to visualize DE genes
 -------------------------------------------------------------------------------
 
 To do list

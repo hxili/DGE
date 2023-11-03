@@ -10,16 +10,12 @@ library(tidyverse)
 library(stringr)
 library(dplyr)
 library(edgeR)
+library(ggplot2)
 ```
-
-
-
 First we copy the [list of SLCs in mammalian genomes](https://esbl.nhlbi.nih.gov/Databases/SLC-list/) and convert gene IDs to ENSG IDs with tool on this [page](https://biit.cs.ut.ee/gprofiler/convert).Then we can select all SLCs in GTEx gene counts data file with `filter.py` in terminal.
-
 ```{bash, eval=FALSE}
 python3 filter.py -f1 ../input/gProfiler_hsapiens_10-19-2023_8-37-11\ PM.csv -f2 ../input/bulk-gex_v8_rna-seq_GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_reads.gct -o ../Input/GTEx_SLCs_gene_reads.gct
 ```
-
 
 ```{r}
 # Load count data
@@ -28,7 +24,8 @@ samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttribut
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
 
-
+cor.table <- cor(counts.data[,-1])
+cor.table %>% gplots::heatmap.2(dendrogram="row", trace = "none", col=viridis::viridis(25, begin=.25), margins=c(7,8))
 # Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should include all the data
 tiss1.sampid <- samp.anno.data %>%
   filter(SMTS=='Ovary') %>% 
@@ -55,10 +52,7 @@ tiss1.sampid <- tiss1.sampid %>%
 tiss2.sampid <- tiss2.sampid %>% 
   mutate(TS='Testis')
 ```
-
-
 Before we can normalize the data we need to be able to tell edgeR which groups the samples belong to. Here group refers to the distinct sample types (i.e. combinations of tissue, age, death circumstance)
-
 ```{r}
 sample.description <- tiss1.sampid %>% 
   bind_rows(tiss2.sampid) %>%
@@ -68,16 +62,14 @@ sample.description <- tiss1.sampid %>%
   select(-SUBJID)
 
 sample.description <- sample.description %>%
-  mutate(TS=factor(TS,levels = c("Testis","Ovary")),
+  mutate(TS=factor(TS,levels = c("Ovary","Testis")),
          SEX=factor(SEX,levels = c(1,2)),
          AGE=factor(AGE,levels = c("20-29","30-39","40-49","50-59","60-69","70-79")),
          DTHHRDY=factor(DTHHRDY,levels = c(0,1,2,3,4)))
 
 sample.description
 ```
-
 Calculate normalization factors by TMM method while RPKM is poorly behaved statistically, and plot multidimensional scaling plot of distances between gene expression profiles by logFC methods instead of bcv due to the large quantity of samples
-
 ```{r}
 counts.matrix <- counts.data %>% select(-Description) %>% as.matrix()
 rownames(counts.matrix) <- counts.data$Description
@@ -100,11 +92,8 @@ matched_colors <- color_info$color[match(colnames(dge.data), color_info$SAMPID)]
 
 plotMDS(dge.data, method = "logFC", pch=16, col=matched_colors)
 ```
-
 We can see samples are well divided into 2 clusters by tissue. This plot could convince us of the correctness of the experiment and data.
-
 Randomly select 6 samples and plot them to check the effect of normalization
-
 ```{r}
 counts.data.normal <- cpm(dge.data) 
 
@@ -113,27 +102,36 @@ counts.data.normal.log <- cpm(dge.data,log = TRUE)
 
 counts.data.log <- log2(counts.data[,-1] + 1)
 
-counts.data.log.pvt <- counts.data.log[,sample(ncol(counts.data.log), 6)]
+counts.data.log.pvt <- counts.data.log
 
-counts.data.log.pvt <- counts.data.log.pvt %>% pivot_longer(colnames(counts.data.log.pvt), names_to="sample", values_to="value")
+counts.data.log.pvt <- counts.data.log.pvt %>% 
+  pivot_longer(colnames(counts.data.log.pvt), names_to="sample", values_to="value")
 
-counts.data.log.pvt %>% ggplot(aes(x=sample, y=value)) +
+counts.data.log.pvt <- sample.description %>% 
+  select(SAMPID, group) %>% 
+  right_join(counts.data.log.pvt, by=join_by(SAMPID==sample))
+
+counts.data.log.pvt %>% ggplot(aes(x=group, y=value)) +
   geom_boxplot() +
-  theme(axis.text.x = element_text(angle = 45))
+  theme(axis.text.x = element_text(angle = 70))
 
-counts.data.normal.log.pvt <- data.frame(counts.data.normal.log)[,sample(ncol(counts.data.normal.log), 6)]
+counts.data.normal.log.pvt <- as.data.frame(counts.data.normal.log)
   
 
-counts.data.normal.log.pvt <- counts.data.normal.log.pvt %>% pivot_longer(colnames(counts.data.normal.log.pvt), names_to="sample", values_to="value")
-counts.data.normal.log.pvt %>% ggplot(aes(x=sample, y=value)) +
+counts.data.normal.log.pvt <- counts.data.normal.log.pvt %>% 
+  pivot_longer(colnames(counts.data.normal.log.pvt), names_to="sample", values_to="value")
+
+counts.data.normal.log.pvt <- sample.description %>% 
+  select(SAMPID, group) %>% 
+  right_join(counts.data.normal.log.pvt, by=join_by(SAMPID==sample))
+
+counts.data.normal.log.pvt %>% ggplot(aes(x=group, y=value)) +
   geom_boxplot() +
-  theme(axis.text.x = element_text(angle = 45))
+  theme(axis.text.x = element_text(angle = 70))
 ```
 
-
-Now calculate dispersion factors
-
 ```{r}
+# Now calculate dispersion factors
 design <- model.matrix(~TS,data = sample.description)
 rownames(design) <- sample.description$SAMPID
 
@@ -147,23 +145,30 @@ dge.data <- estimateGLMTrendedDisp(dge.data,design)
 dge.data <- estimateGLMTagwiseDisp(dge.data,design)
 ```
 
-
-Draw dispersion plot
-
 ```{r}
+# Draw dispersion plot
 plotBCV(dge.data)
 ```
 
-
-Find genes that expressed differently in these 2 tissues
-
 ```{r}
+# Find genes that expressed differently in these 2 tissues
 fit <- glmFit(dge.data, design)
 
-gt.lrt <- glmLRT(fit,coef = "TSOvary")
+ts.lrt <- glmLRT(fit,coef = "TSOvary")
 
-# Show top ten genes
-topTags(gt.lrt)
+# label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
+results <- topTags(ts.lrt, n=Inf)$table
+results$significant <- results$FDR < 0.05 & abs(results$logFC) > log2(1.5)
+results <- results %>%
+  rownames_to_column(var="GeneID")
+results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Significant")
+
+ggplot(results, aes(x = logFC, y = -log10(PValue), col=significant)) +
+  geom_point(alpha = 0.5) +
+  geom_vline(xintercept = c(-log2(1.5),log2(1.5)), linetype="dashed",color="blue") +  # LogFC lines
+  geom_hline(yintercept = -log10(0.05),linetype = "dashed",color = "blue") +  # FDR lin
+  theme_minimal() +
+  labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value", title = "Volcano Plot")
 # Summarize the number of differentially expressed genes
 summary(decideTestsDGE(gt.lrt,p.value=0.01))
 ```
