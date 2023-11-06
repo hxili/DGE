@@ -7,10 +7,11 @@ output:
 
 ```{r}
 library(tidyverse)
-library(stringr)
-library(dplyr)
+#library(stringr)
+#library(dplyr)
 library(edgeR)
 library(ggplot2)
+library(limma)
 ```
 First we copy the [list of SLCs in mammalian genomes](https://esbl.nhlbi.nih.gov/Databases/SLC-list/) and convert gene IDs to ENSG IDs with tool on this [page](https://biit.cs.ut.ee/gprofiler/convert).Then we can select all SLCs in GTEx gene counts data file with `filter.py` in terminal.
 ```{bash, eval=FALSE}
@@ -24,8 +25,9 @@ samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttribut
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
 
-cor.table <- cor(counts.data[,-1])
-cor.table %>% gplots::heatmap.2(dendrogram="row", trace = "none", col=viridis::viridis(25, begin=.25), margins=c(7,8))
+# For our subsequent analyses we want to reduce the data set to only those genes with some expression. In this case we will retain genes with > 10 reads in >= 100 samples
+counts.data <- counts.data[rowSums(counts.data[,-1] > 10) >= 100,]
+
 # Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should include all the data
 tiss1.sampid <- samp.anno.data %>%
   filter(SMTS=='Ovary') %>% 
@@ -45,6 +47,9 @@ ids <- tiss1.sampid %>%
 counts.data <- counts.data %>% 
   select(matches(ids))
 
+#cor.table <- cor(counts.data[,-1])
+#cor.table %>% gplots::heatmap.2(dendrogram="row", trace = "none", col=viridis::viridis(25, begin=.25), margins=c(7,8))
+
 # Create a tibble for edgeR description
 tiss1.sampid <- tiss1.sampid %>% 
   mutate(TS='Ovary')
@@ -62,7 +67,7 @@ sample.description <- tiss1.sampid %>%
   select(-SUBJID)
 
 sample.description <- sample.description %>%
-  mutate(TS=factor(TS,levels = c("Ovary","Testis")),
+  mutate(TS=factor(TS,levels = c("Testis","Ovary")), # setting the levels in this way makes "Testis" the reference  
          SEX=factor(SEX,levels = c(1,2)),
          AGE=factor(AGE,levels = c("20-29","30-39","40-49","50-59","60-69","70-79")),
          DTHHRDY=factor(DTHHRDY,levels = c(0,1,2,3,4)))
@@ -141,7 +146,8 @@ dge.data <- estimateGLMCommonDisp(dge.data,design,verbose = TRUE)
 # Then a trended dispersion based on count level
 dge.data <- estimateGLMTrendedDisp(dge.data,design)
 
-# And lastly we calculate the gene-wise dispersion, using the prior estimates to "squeeze" the dispersion towards the common dispersion.
+# And lastly we calculate the gene-wise dispersion, using the prior estimates to 
+#"squeeze" the dispersion towards the common dispersion.
 dge.data <- estimateGLMTagwiseDisp(dge.data,design)
 ```
 
@@ -159,8 +165,6 @@ ts.lrt <- glmLRT(fit,coef = "TSOvary")
 # label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
 results$significant <- results$FDR < 0.05 & abs(results$logFC) > log2(1.5)
-results <- results %>%
-  rownames_to_column(var="GeneID")
 results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Significant")
 
 ggplot(results, aes(x = logFC, y = -log10(PValue), col=significant)) +
@@ -170,7 +174,33 @@ ggplot(results, aes(x = logFC, y = -log10(PValue), col=significant)) +
   theme_minimal() +
   labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value", title = "Volcano Plot")
 # Summarize the number of differentially expressed genes
-summary(decideTestsDGE(gt.lrt,p.value=0.01))
+summary(decideTestsDGE(ts.lrt,p.value=0.05,lfc=log2(1.5)))
+
+## Go enrichment analysis left to do here
+
+```
+
+
+
+```{r}
+## As Most of the simplest clustering assumes data to be from a normal 
+##distribution. we need to transformed the RNAseq data to be normally 
+##distributed
+
+# Identify the DEGs based on the significance criteria established (e.g., 
+# FDR < 0.05 and an absolute LFC greater than log2(1.5)).
+
+
+degs <- results[results$significant,]
+
+# Retrieve counts data of degs
+deg.expr.matrix <- counts.matrix[rownames(counts.matrix) %in% rownames(degs), ]
+
+v <- voom(deg.expr.matrix, design, plot=TRUE)
+expr.matrix <- v$E
+
+#v <- voom(counts.matrix, design, plot=TRUE)
+#expr.matrix <- v$E
 ```
 
 

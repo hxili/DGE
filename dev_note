@@ -1,11 +1,11 @@
 The format of the sample ID is GTEX-[donor ID]-[tissue site ID]-SM-[aliquot ID]. 
 
 10.20
-Selected all human SLCs from RNA seq dataframe with filter.py 
+Selected all human SLCs from RNA seq dataframe with filter.py.
 
 10.22
 We first focus on differential expression pattern between 2 tissue, the ID of 
-which are 0126 and 0326
+which are 0126 and 0326.
 
 10.24
 Don't know why, but it seems that the [tissue site ID] is not specific to a 
@@ -13,17 +13,101 @@ tissue. We now test Ovary and Testis so there's only one gender in each group.
 
 10.26
 The top one differentially expressed gene SLC36A3 was reported to be restricted 
-in Testis
+in Testis.
 Ref: DOI: 10.1007/s00335-003-2319-3
 
-10.27
-Drew a boxplot instead of violin plot for normalized counts as there are two many
-groups to show. Also drew a volcano plot to visualize DE genes
--------------------------------------------------------------------------------
+11.03
+Drew a boxplot instead of violin plot for normalized counts as there are two 
+many groups to show. Also drew a volcano plot to visualize DE genes.
+
+11.05
+The SLC25A6 have 2 transcripts in counts.data, one of them is of no count and 
+may cause by error, so we deleted the empty one.
+--------------------------------------------------------------------------------
 
 To do list
 
 Analyse heart, ovary, and testis counts data to identify co-expression genes, 
 highly expressed genes and the take age, gender into account. Volcano and violin 
 plot may be useful. Then analyse GO terms or Mesh? to check if there's specific 
-small molecules bind to those genes and disease relateed ot it
+small molecules bind to those genes or disease related to it
+
+--------------------------------------------------------------------------------
+Pipeline:
+After normalization of count data in Differential Gene Expression (DGE) analysis, 
+several key steps typically follow. These steps aim to identify differentially 
+expressed genes between conditions or treatments and to understand the 
+biological implications of these differences. Here's an overview of the standard 
+workflow:
+
+1. **Quality Control (QC) Post-Normalization**:
+    - Check the distribution of normalized counts to ensure that normalization 
+    has been successful.
+    - Use boxplots, density plots, or violin plots to assess the distribution of 
+    counts across samples.
+    - Use principal component analysis (PCA) or multi-dimensional scaling (MDS) 
+    plots to visualize the overall effect of normalization and to detect 
+    outliers or batch effects.
+
+2. **Dispersion Estimation**:
+    - Estimate the dispersion of counts for each gene, which reflects the 
+    variability not explained by the normalization.
+    - Dispersion is necessary for models that assume a negative binomial 
+    distribution of the data.
+
+3. **Differential Expression Analysis**:
+    - Use statistical models (like those implemented in edgeR, DESeq2, or limma) 
+    to test for differential expression between groups.
+    - Adjust for multiple testing to control the false discovery rate (FDR), 
+    typically using methods like the Benjamini-Hochberg procedure.
+
+4. **Result Interpretation**:
+    - Generate lists of differentially expressed genes using a threshold for 
+    significance (e.g., adjusted p-value) and log fold change.
+    - Summarize the results in tables including gene identifiers, log fold 
+    changes, p-values, and adjusted p-values.
+
+5. **Functional Enrichment Analysis**:
+    - Perform Gene Ontology (GO) enrichment analysis to identify biological 
+    processes, molecular functions, and cellular components associated with the 
+    differentially expressed genes.
+    - Conduct pathway analysis using databases like KEGG, Reactome, or BioCarta 
+    to find affected biological pathways.
+
+6. **Gene Set Enrichment Analysis (GSEA)**:
+    - Use GSEA to identify coordinated changes in expression of predefined gene 
+    sets.
+    - This is particularly useful when no single gene stands out, but a group of 
+    related genes shows a consistent trend.
+
+7. **Network Analysis**:
+    - Build gene-gene interaction networks to visualize the relationship between 
+    differentially expressed genes.
+    - Identify key hubs or nodes in the network that may play critical roles in 
+    the biological processes of interest.
+
+8. **Validation of Findings**:
+    - Validate the RNA-seq findings with independent methods such as qRT-PCR for 
+    selected genes.
+    - Replication of experiments in different cohorts or biological replicates 
+    to confirm the robustness of the findings.
+
+9. **Data Integration**:
+    - Combine the RNA-seq data with other types of omics data (e.g., proteomics, 
+    metabolomics) to obtain a holistic view of the biological system.
+
+10. **Visualization**:
+    - Use heatmaps to show the expression patterns of differentially expressed 
+    genes across samples.
+    - Create volcano plots to visualize the significance versus the magnitude of 
+    expression changes.
+
+11. **Reporting**:
+    - Prepare a comprehensive report or manuscript detailing the methodology, 
+    results, and biological implications.
+    - Ensure that raw and processed data are available in public repositories 
+    (like GEO or SRA) to comply with FAIR data principles.
+
+Each of these steps provides further insight into the biological questions being 
+asked and helps to build a comprehensive picture of the gene expression changes 
+resulting from the experimental conditions or treatments being studied.
