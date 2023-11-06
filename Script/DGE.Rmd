@@ -12,6 +12,7 @@ library(tidyverse)
 library(edgeR)
 library(ggplot2)
 library(limma)
+library(ggdendro)
 ```
 First we copy the [list of SLCs in mammalian genomes](https://esbl.nhlbi.nih.gov/Databases/SLC-list/) and convert gene IDs to ENSG IDs with tool on this [page](https://biit.cs.ut.ee/gprofiler/convert).Then we can select all SLCs in GTEx gene counts data file with `filter.py` in terminal.
 ```{bash, eval=FALSE}
@@ -24,9 +25,6 @@ counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
 samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt")
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
-
-# For our subsequent analyses we want to reduce the data set to only those genes with some expression. In this case we will retain genes with > 10 reads in >= 100 samples
-counts.data <- counts.data[rowSums(counts.data[,-1] > 10) >= 100,]
 
 # Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should include all the data
 tiss1.sampid <- samp.anno.data %>%
@@ -46,6 +44,9 @@ ids <- tiss1.sampid %>%
 
 counts.data <- counts.data %>% 
   select(matches(ids))
+
+# For our subsequent analyses we want to reduce the data set to only those genes with some expression. In this case we will discard genes with no reads in >= 50 samples
+counts.data <- counts.data[rowSums(counts.data[,-1]==0)<50,]
 
 #cor.table <- cor(counts.data[,-1])
 #cor.table %>% gplots::heatmap.2(dendrogram="row", trace = "none", col=viridis::viridis(25, begin=.25), margins=c(7,8))
@@ -187,20 +188,27 @@ summary(decideTestsDGE(ts.lrt,p.value=0.05,lfc=log2(1.5)))
 ##distribution. we need to transformed the RNAseq data to be normally 
 ##distributed
 
-# Identify the DEGs based on the significance criteria established (e.g., 
-# FDR < 0.05 and an absolute LFC greater than log2(1.5)).
+v <- voom(counts.matrix, design, plot=TRUE)
+voom_E <- as.data.frame(v$E) %>% 
+  tibble::rownames_to_column(var = "GeneID")
 
+calc.cv <- function(x, na.rm=TRUE) { # function to calculate the coefficient of variation
+  if(na.rm==TRUE) x <- na.omit(x)
+  result <- sd(x) / mean(x) # CV calculation
+  result <- abs(result) # no negative CVs!
+  return(result)
+}
+# Doing this with base R because tidy is slow on row-wise calculations
+voom_E$cv <- apply(voom_E[,-1], 1, calc.cv)
+voom_E <- voom_E %>% select(GeneID, cv, everything())
 
-degs <- results[results$significant,]
+E_matrix <- voom_E %>% 
+  select(-GeneID, -cv) %>% 
+  as.matrix() %>% 
+  scale() 
 
-# Retrieve counts data of degs
-deg.expr.matrix <- counts.matrix[rownames(counts.matrix) %in% rownames(degs), ]
-
-v <- voom(deg.expr.matrix, design, plot=TRUE)
-expr.matrix <- v$E
-
-#v <- voom(counts.matrix, design, plot=TRUE)
-#expr.matrix <- v$E
+gene_hclust_row <- E_matrix %>% dist() %>% hclust()
+ggdendrogram(gene_hclust_row)
 ```
 
 

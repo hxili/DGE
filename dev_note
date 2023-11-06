@@ -22,7 +22,16 @@ many groups to show. Also drew a volcano plot to visualize DE genes.
 
 11.05
 The SLC25A6 have 2 transcripts in counts.data, one of them is of no count and 
-may cause by error, so we deleted the empty one.
+may cause by error, so we deleted the empty one. As coefficient of variance is 
+calculated with the use of every sample, we can expect to see more subtle 
+difference between subgroup of the two main group divided by tissue, so we 
+should not only take degs (differentially expressed genes) into account, but 
+should use the whole conutds.data.
+
+Some transcripts were only found in a small amount of samples while connot be 
+detected in most of others. So we add an selective criterion after 
+loading counts data to avoid extremly high bias in cv cause by transcripts only 
+existing in 10 or 20 samples
 --------------------------------------------------------------------------------
 
 To do list
