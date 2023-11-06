@@ -90,13 +90,39 @@ dge.data <- calcNormFactors(dge.data, method = "TMM")
 dge.data$samples
 
 # Make a plot of the Biological Coefficient of Variation of each sample
-color_info <- sample.description %>% 
-  mutate(color=ifelse(TS=="Testis","darkred","lightgreen")) %>% 
-  select(-TS)
 
-matched_colors <- color_info$color[match(colnames(dge.data), color_info$SAMPID)]
+# Try to find out if sample can be divided by variables (i.e. TS, AGE, SEX)
+plot_info <- sample.description %>% 
+  mutate(col=ifelse(TS=="Testis","#000000","#FFFFFF"),
+         pch=ifelse(SEX==1,21,24),
+         bg=case_when(AGE=="20-29"~"#1F77B4",
+                       AGE=="30-39"~"#FF7F0E",
+                       AGE=="40-49"~"#2CA02C",
+                       AGE=="50-59"~"#D62728",
+                       AGE=="60-69"~"#9467BD",
+                       AGE=="70-79"~"#8C564B")
+    ) %>% 
+  select(SAMPID,bg,pch,col)
 
-plotMDS(dge.data, method = "logFC", pch=16, col=matched_colors)
+# (i.e. TS, AGE, SEX)
+plot_info <- sample.description %>% 
+  mutate(col=ifelse(TS=="Testis","#000000","#FFFFFF"),
+         pch=ifelse(SEX==1,21,24),
+         bg=case_when(DTHHRDY==0~"#1F77B4",
+                       DTHHRDY==1~"#FF7F0E",
+                       DTHHRDY==2~"#2CA02C",
+                       DTHHRDY==3~"#D62728",
+                       DTHHRDY==4~"#9467BD",
+                       TRUE~"#8C564B")
+    ) %>% 
+  select(SAMPID,bg,pch,col)
+
+matched_bgs <- plot_info$bg[match(colnames(dge.data), plot_info$SAMPID)]
+matched_pchs <- plot_info$pch[match(colnames(dge.data), plot_info$SAMPID)]
+matched_cols <- plot_info$col[match(colnames(dge.data), plot_info$SAMPID)]
+
+plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
+        cex=1.4)
 ```
 We can see samples are well divided into 2 clusters by tissue. This plot could convince us of the correctness of the experiment and data.
 Randomly select 6 samples and plot them to check the effect of normalization
