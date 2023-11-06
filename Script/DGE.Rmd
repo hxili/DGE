@@ -104,25 +104,29 @@ plot_info <- sample.description %>%
     ) %>% 
   select(SAMPID,bg,pch,col)
 
-# (i.e. TS, AGE, SEX)
-plot_info <- sample.description %>% 
-  mutate(col=ifelse(TS=="Testis","#000000","#FFFFFF"),
-         pch=ifelse(SEX==1,21,24),
-         bg=case_when(DTHHRDY==0~"#1F77B4",
-                       DTHHRDY==1~"#FF7F0E",
-                       DTHHRDY==2~"#2CA02C",
-                       DTHHRDY==3~"#D62728",
-                       DTHHRDY==4~"#9467BD",
-                       TRUE~"#8C564B")
-    ) %>% 
-  select(SAMPID,bg,pch,col)
+# (i.e. TS, AGE, SEX, DTHHRDY)
+#plot_info <- sample.description %>% 
+#  mutate(col=ifelse(TS=="Testis","#000000","#FFFFFF"),
+#         pch=ifelse(SEX==1,21,24),
+#         bg=case_when(DTHHRDY==0~"#1F77B4",
+#                       DTHHRDY==1~"#FF7F0E",
+#                       DTHHRDY==2~"#2CA02C",
+#                       DTHHRDY==3~"#D62728",
+#                       DTHHRDY==4~"#9467BD",
+#                       TRUE~"#8C564B")
+#    ) %>% 
+#  select(SAMPID,bg,pch,col)
 
 matched_bgs <- plot_info$bg[match(colnames(dge.data), plot_info$SAMPID)]
 matched_pchs <- plot_info$pch[match(colnames(dge.data), plot_info$SAMPID)]
 matched_cols <- plot_info$col[match(colnames(dge.data), plot_info$SAMPID)]
 
-plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
-        cex=1.4)
+mds <- plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
+        cex=1.4, dim.plot=c(1,2))
+
+mds <- plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
+        cex=1.4, dim.plot=c(3,2))
+
 ```
 We can see samples are well divided into 2 clusters by tissue. This plot could convince us of the correctness of the experiment and data.
 Randomly select 6 samples and plot them to check the effect of normalization
@@ -218,25 +222,41 @@ summary(decideTestsDGE(ts.lrt,p.value=0.05,lfc=log2(1.5)))
 
 v <- voom(counts.matrix, design, plot=TRUE)
 voom_E <- as.data.frame(v$E) %>% 
-  tibble::rownames_to_column(var = "GeneID")
+  rownames_to_column(var = "GeneID")
 
-calc.cv <- function(x, na.rm=TRUE) { # function to calculate the coefficient of variation
-  if(na.rm==TRUE) x <- na.omit(x)
-  result <- sd(x) / mean(x) # CV calculation
-  result <- abs(result) # no negative CVs!
-  return(result)
-}
-# Doing this with base R because tidy is slow on row-wise calculations
-voom_E$cv <- apply(voom_E[,-1], 1, calc.cv)
-voom_E <- voom_E %>% select(GeneID, cv, everything())
+voom_E <- voom_E %>%
+  t() %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "SAMPID") %>% 
+  left_join(sample.description,by="SAMPID") 
 
-E_matrix <- voom_E %>% 
-  select(-GeneID, -cv) %>% 
+colnames(voom_E) <- c(voom_E[1,1:333],1,2,3,4,"group")
+voom_E <- voom_E[-1,-334:-337] %>% 
+  mutate(across(c(2:333), as.numeric))
+
+#voom_E
+
+mean_vals <- voom_E %>%
+  group_by(group) %>%
+  summarise(across(where(is.numeric), mean, na.rm = TRUE))
+ 
+mean_vals_t <- mean_vals %>% 
+  t()
+colnames(mean_vals_t) <- mean_vals_t[1,]
+
+mean_vals_t <- mean_vals_t[-1,] %>% 
+  as.data.frame() %>% 
+  mutate(across(c(1:48), ~as.numeric(.)))
+
+mean_vals_t
+
+E_matrix <- mean_vals_t %>%
   as.matrix() %>% 
-  scale() 
+  scale() # scale and center the data so that each gene has a mean of 0 and a standard deviation of 1. This prevents genes with high expression from having an undue influence on our results
 
-gene_hclust_row <- E_matrix %>% dist() %>% hclust()
-ggdendrogram(gene_hclust_row)
+gene_hclust_col <- E_matrix %>% t()  %>% dist() %>% hclust()
+ggdendrogram(gene_hclust_col)
+
 ```
 
 

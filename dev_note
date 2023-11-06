@@ -28,10 +28,12 @@ difference between subgroup of the two main group divided by tissue, so we
 should not only take degs (differentially expressed genes) into account, but 
 should use the whole conutds.data.
 
-Some transcripts were only found in a small amount of samples while connot be 
+Some transcripts are only found in a small amount of samples while connot be 
 detected in most of others. So we add an selective criterion after 
 loading counts data to avoid extremly high bias in cv cause by transcripts only 
-existing in 10 or 20 samples
+existing in 10 or 20 samples.
+
+We cluster the groups by hierarchical clustering
 --------------------------------------------------------------------------------
 
 To do list
