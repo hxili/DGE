@@ -34,6 +34,9 @@ loading counts data to avoid extremly high bias in cv cause by transcripts only
 existing in 10 or 20 samples.
 
 We cluster the groups by hierarchical clustering
+
+11.07
+Conduct k-means clustering
 --------------------------------------------------------------------------------
 
 To do list
