@@ -9,9 +9,9 @@ output:
 library(tidyverse)
 #library(stringr)
 #library(dplyr)
+library(limma)
 library(edgeR)
 library(ggplot2)
-library(limma)
 library(ggdendro)
 library(pvclust)
 library(gplots)
@@ -280,10 +280,12 @@ prcomp_counts <- prcomp(E_matrix)
 scores <- as.data.frame(prcomp_counts$x)[,c(1,2)]
 
 ## Get appropriate cluster number
-set.seed(125)
-gap <- clusGap(E_matrix, FUN = kmeans, iter.max = 30, K.max = 30, B = 200)
+#set.seed(125)
+gap <- clusGap(E_matrix, FUN=kmeans, iter.max=10000, K.max=30, B=100)
 
 plot(gap, main = "Gap Statistic")
+
+with(gap, maxSE(Tab[,"gap"], Tab[,"SE.sim"], method="firstSEmax"))
 
 # We now try 5 clusters
 set.seed(25)
@@ -305,8 +307,9 @@ ggplot(data = plotting, aes(x = PC1, y = PC2, label = Row.names, color = cluster
 clus <- cbind(clus, E_matrix) %>% # add cluster labels to gene expression matrix
   mutate(gene_index=1:nrow(clus)) # would be better to bring in gene names but OK for now.
 
-clus <- clus %>% pivot_longer(c(-cluster, -gene_index), names_to = "sample_ID", values_to = "expression") %>% # get ready for plotting
-  mutate("sample_group" = str_remove(sample_ID, "_.$"))
+clus <- clus %>% 
+  pivot_longer(c(-cluster, -gene_index), names_to = "sample_ID", values_to = "expression") %>% # get ready for plotting
+  mutate("sample_group" = str_remove(sample_ID, "(_[0134]|NA)$"))
 
 clus_summary <- clus %>% # average across replicates
   group_by(gene_index, cluster, sample_group) %>%
