@@ -124,11 +124,50 @@ matched_bgs <- plot_info$bg[match(colnames(dge.data), plot_info$SAMPID)]
 matched_pchs <- plot_info$pch[match(colnames(dge.data), plot_info$SAMPID)]
 matched_cols <- plot_info$col[match(colnames(dge.data), plot_info$SAMPID)]
 
-mds <- plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
+# Unique age groups and corresponding colors
+age_groups <- c("20-29", "30-39", "40-49", "50-59", "60-69", "70-79")
+age_colors <- c("#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#8C564B")
+
+# Sex symbols
+sex_symbols <- c(21, 24)
+sex_labels <- c("Male", "Female")
+
+# Tissue outline colors
+ts_groups <- c("Testis", "Ovary")
+ts_colors <- c("#000000","#FFFFFF")
+
+
+plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
         cex=1.4, dim.plot=c(1,2))
 
-mds <- plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
-        cex=1.4, dim.plot=c(3,2))
+# Add a legend for Age groups
+legend("bottom",  # Places the legend in the top right corner of the plot
+       legend = age_groups,
+       fill = age_colors,
+       title = "Age",
+       cex = 0.8,
+       y.intersp = 0.7)  # Adjusts the size of the text in the legend
+
+# Add another legend for Sex
+legend("topleft",  # Places the legend in the bottom right corner of the plot
+       legend = sex_labels,
+       pch = sex_symbols,
+       title = "Sex",
+       cex = 0.8,
+       y.intersp = 0.7)
+# Add the last for TS
+legend("topright",  # Places the legend in the top left corner of the plot
+       legend = ts_groups,
+       col = ts_colors,
+       border = ts_colors,
+       fill = "#D62728",
+       pch = 21,
+       title = "Tissue",
+       cex = 0.8,
+       y.intersp = 0.7)  # Adjusts the size of the text in the legend
+
+#plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
+#        cex=1.4, dim.plot=c(3,2))
 
 ```
 We can see samples are well divided into 2 clusters by tissue. This plot could convince us of the correctness of the experiment and data.
