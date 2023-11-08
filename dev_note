@@ -17,7 +17,7 @@ in Testis.
 Ref: DOI: 10.1007/s00335-003-2319-3
 
 11.03
-Drew a boxplot instead of violin plot for normalized counts as there are two 
+Draw a boxplot instead of violin plot for normalized counts as there are too 
 many groups to show. Also drew a volcano plot to visualize DE genes.
 
 11.05
