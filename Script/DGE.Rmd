@@ -160,7 +160,7 @@ legend("topright",  # Places the legend in the top left corner of the plot
        legend = ts_groups,
        col = ts_colors,
        border = ts_colors,
-       fill = "#D62728",
+       fill = "#FFFFFF",
        pch = 21,
        title = "Tissue",
        cex = 0.8,
