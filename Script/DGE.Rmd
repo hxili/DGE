@@ -16,10 +16,11 @@ library(ggdendro)
 library(pvclust)
 library(gplots)
 library(cluster)
+library(igraph)
 ```
 First we copy the [list of SLCs in mammalian genomes](https://esbl.nhlbi.nih.gov/Databases/SLC-list/) and convert gene IDs to ENSG IDs with tool on this [page](https://biit.cs.ut.ee/gprofiler/convert).Then we can select all SLCs in GTEx gene counts data file with `filter.py` in terminal.
 ```{bash, eval=FALSE}
-python3 filter.py -f1 ../input/gProfiler_hsapiens_10-19-2023_8-37-11\ PM.csv -f2 ../input/bulk-gex_v8_rna-seq_GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_reads.gct -o ../Input/GTEx_SLCs_gene_reads.gct
+python filter.py -f1 ../Input/gProfiler_hsapiens_10-19-2023_8-37-11\ PM.csv -f2 ../Input/bulk-gex_v8_rna-seq_GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_reads.gct -o ../Input/GTEx_SLCs_gene_reads.gct
 ```
 
 ```{r}
@@ -266,19 +267,19 @@ v <- voom(counts.matrix, design, plot=TRUE)
 voom_E <- as.data.frame(v$E) %>% 
   rownames_to_column(var = "GeneID")
 
-voom_E <- voom_E %>%
+voom_Et <- voom_E %>%
   t() %>% 
   as.data.frame() %>% 
   rownames_to_column(var = "SAMPID") %>% 
-  left_join(sample.description,by="SAMPID") 
+  left_join(sample.description,by="SAMPID")
 
-colnames(voom_E) <- c(voom_E[1,1:333],1,2,3,4,"group")
-voom_E <- voom_E[-1,-334:-337] %>% 
+colnames(voom_Et) <- c("SAMPID",voom_Et[1,2:333],1,2,3,4,"group")
+voom_Et <- voom_Et[-1,-334:-337] %>% 
   mutate(across(c(2:333), as.numeric))
 
 #voom_E
 
-mean_vals <- voom_E %>%
+mean_vals <- voom_Et %>%
   group_by(group) %>%
   summarise(across(where(is.numeric), mean, na.rm = TRUE))
  
@@ -306,7 +307,8 @@ ggdendrogram(gene_hclust_col)
 
 #plot(fit, print.num=FALSE) # dendogram with p-values
 
-heatmap.2(E_matrix, Rowv = as.dendrogram(gene_hclust_row),  density.info="none", trace="none", margins = c(10,5))
+heatmap.2(E_matrix, Rowv = as.dendrogram(gene_hclust_col),  density.info="none", 
+          trace="none", margins = c(20,10))
 
 ```
 
@@ -359,6 +361,81 @@ clus_summary %>% ggplot(aes(x=sample_group, y=expression, group=gene_index)) + #
   facet_wrap(~cluster, ncol=4) +
   coord_fixed(ratio=1) +
   theme(axis.text.x = element_text(angle = 90, size = 7, hjust = 1, vjust = 0))
+```
+```{r}
+#  Co-Expression
+## Get DGEs
+DEgenes <- topTags(ts.lrt,n = Inf,p.value = 0.05)$table
+voom_E_ts <- voom_E %>%
+  filter(GeneID %in% rownames(DEgenes))
+
+## Turn to matrix
+E_matrix_ts <- voom_E_ts %>%
+  as.data.frame() %>%
+  column_to_rownames("GeneID") %>%
+  as.matrix()
+
+## Calculate mutual ranks
+E_matrix_cor <- cor(t(E_matrix_ts))
+diag(E_matrix_cor) <- 0
+E_matrix_rank <- apply(E_matrix_cor,2,function(x) rank(-abs(x)))
+E_matrix_MR <- sqrt(E_matrix_rank * t(E_matrix_rank))
+
+genes_adj_MR4 <- E_matrix_MR <= 4
+diag(genes_adj_MR4) <- 0
+
+genes_adj_MR10 <- E_matrix_MR <= 10
+diag(genes_adj_MR10) <- 0
+
+## Plot our networks using different thresholds for connectivity
+gene_graphMR4 <- graph.adjacency(genes_adj_MR4, mode = "undirected") #convert adjacency to graph
+compsMR4 <- clusters(gene_graphMR4)$membership                        #define gene cluster membership
+colbar <- rainbow(max(compsMR4)+1)                                   #define colors
+V(gene_graphMR4)$color <- colbar[compsMR4+1]                          #assign colors to nodes
+plot(gene_graphMR4, layout = layout_with_fr, vertex.size = 4, vertex.label = NA, main="MR 4")
+  
+gene_graphMR10 <- graph.adjacency(genes_adj_MR10, mode = "undirected") #convert adjacency to graph
+compsMR10 <- clusters(gene_graphMR10)$membership                        #define gene cluster membership
+colbar <- rainbow(max(compsMR10)+1)                                   #define colors
+V(gene_graphMR10)$color <- colbar[compsMR10+1]                          #assign colors to nodes
+plot(gene_graphMR10, layout = layout_with_fr, vertex.size = 4, vertex.label = NA, main="MR 10")
+```
+
+```{r, include=FALSE, eval=FALSE}
+E_matrix_5 <- E_matrix_ts[11:15,]
+E_matrix_5_cor <- cor(t(E_matrix_5))
+
+diag(E_matrix_5_cor) <- 0
+
+
+E_matrix_5_rank <- apply(E_matrix_5_cor,2,function(x) rank(-abs(x)))
+E_matrix_5_rank
+
+E_matrix_5_MR <- sqrt(E_matrix_5_rank * t(E_matrix_5_rank))
+E_matrix_5_MR %>% round(3)
+
+genes_adj_MR2 <- E_matrix_5_MR <= 2
+diag(genes_adj_MR2) <- 0
+genes_adj_MR2
+```
+
+```{r}
+# Graph stats for network comparison
+graph.density(gene_graphMR4)
+average.path.length(gene_graphMR4)
+
+graph.density(gene_graphMR10)
+average.path.length(gene_graphMR10)
+```
+The decrease of average path length can be caused by the dramatic increase of number of dots that been connected when the threshold grows from 4 to 10. These new connected dots are far away from each other compare to those that has already been connected when MR is 4. This may imply that MR4 is better than MR10 because those loosely connected genes suggest nothing regarding biological connection.
+
+```{r}
+# The most central genes
+## Calculate degree centrality
+colSums(genes_adj_MR4) %>%
+  sort(decreasing = TRUE) %>%
+  tibble(GeneID=names(.), degree=.) %>% 
+  head()
 ```
 
 
