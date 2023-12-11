@@ -20,7 +20,7 @@ library(igraph)
 ```
 First we copy the [list of SLCs in mammalian genomes](https://esbl.nhlbi.nih.gov/Databases/SLC-list/) and convert gene IDs to ENSG IDs with tool on this [page](https://biit.cs.ut.ee/gprofiler/convert).Then we can select all SLCs in GTEx gene counts data file with `filter.py` in terminal.
 ```{bash, eval=FALSE}
-python filter.py -f1 ../Input/gProfiler_hsapiens_10-19-2023_8-37-11\ PM.csv -f2 ../Input/bulk-gex_v8_rna-seq_GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_reads.gct -o ../Input/GTEx_SLCs_gene_reads.gct
+python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 ../Input/bulk-gex_v8_rna-seq_GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_reads.gct -o ../Input/GTEx_SLCs_gene_reads.gct
 ```
 
 ```{r}
