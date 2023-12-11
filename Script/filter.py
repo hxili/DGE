@@ -7,29 +7,28 @@ parser.add_argument('-o', type=str, metavar='<path>', help='output file')
 arg = parser.parse_args()
 
 o = open(arg.o, 'w')
-# get the gene ensembl id list
-ids = []
+# Create the dic of which keys are gene ensembl ids and values are gene symbols
+dic = {}
 
 with open(arg.f1) as f:
 	while True:
-
 		line = f.readline()
 		if line == '': break
-		id = line.split(',')[1].strip("\"")
-
-		if id != 'None': ids += [id]
-
-	# keep header in output file
-	ids = ['Name'] + ids[1:]
+		ENSG = line.split(',')[1].strip("\"")
+		sym = line.split(',')[0].strip("\"")
+		if ENSG != 'None': dic[ENSG] = sym
 
 # only rows needed remain
 with open(arg.f2) as f:
 	while True:
 		line = f.readline()
 		if line == '': break
-		id = line.split('	')[0].split('.')[0].strip("\"")
-		if id in ids:
-			o.write(line)
-#			ids.remove(id)
+		ENSG = line.split('	')[0].split('.')[0]
+		if ENSG == 'Name': o.write(line)
+		if ENSG in dic:
+			newline = line.split('	')
+			newline[1] = dic[ENSG]
+			newline = '	'.join(newline)
+			o.write(newline)
 
 o.close()
