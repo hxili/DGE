@@ -273,9 +273,9 @@ voom_Et <- voom_E %>%
   rownames_to_column(var = "SAMPID") %>% 
   left_join(sample.description,by="SAMPID")
 
-colnames(voom_Et) <- c("SAMPID",voom_Et[1,2:333],1,2,3,4,"group")
-voom_Et <- voom_Et[-1,-334:-337] %>% 
-  mutate(across(c(2:333), as.numeric))
+colnames(voom_Et) <- c("SAMPID",voom_Et[1,2:(ncol(voom_Et)-5)],1,2,3,4,"group")
+voom_Et <- voom_Et[-1,-(ncol(voom_Et)-4):-(ncol(voom_Et)-1)] %>% 
+  mutate(across(c(2:(ncol(voom_Et)-5)), as.numeric))
 
 #voom_E
 
@@ -289,7 +289,7 @@ colnames(mean_vals_t) <- mean_vals_t[1,]
 
 mean_vals_t <- mean_vals_t[-1,] %>% 
   as.data.frame() %>% 
-  mutate(across(c(1:48), ~as.numeric(.)))
+  mutate(across(c(1:ncol(mean_vals_t)), ~as.numeric(.)))
 
 mean_vals_t
 
@@ -427,15 +427,14 @@ average.path.length(gene_graphMR4)
 graph.density(gene_graphMR10)
 average.path.length(gene_graphMR10)
 ```
-The decrease of average path length can be caused by the dramatic increase of number of dots that been connected when the threshold grows from 4 to 10. These new connected dots are far away from each other compare to those that has already been connected when MR is 4. This may imply that MR4 is better than MR10 because those loosely connected genes suggest nothing regarding biological connection.
+The increase of average path length can be caused by the dramatic increase of number of dots that been connected when the threshold grows from 4 to 10. These new connected dots are far away from each other compare to those that has already been connected when MR is 4. This may imply that MR4 is better than MR10 because those loosely connected genes suggest nothing regarding biological connection.
 
 ```{r}
 # The most central genes
 ## Calculate degree centrality
 colSums(genes_adj_MR4) %>%
   sort(decreasing = TRUE) %>%
-  tibble(GeneID=names(.), degree=.) %>% 
-  head()
+  tibble(GeneID=names(.), degree=.)
 ```
 
 
