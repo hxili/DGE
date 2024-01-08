@@ -42,6 +42,9 @@ Conduct k-means clustering
 Replace description in counts data with gene symbol in 'List of Solute Carrier 
 Proteins in Mammalian Genomes'. And convert Gene Symbol	istead of SLC Designator
 as before. The number of available SLCs increases from 376 to 424.
+
+01.08
+We can explore if there's any TF decrease or increase because of aging
 --------------------------------------------------------------------------------
 
 To do list
