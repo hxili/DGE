@@ -174,6 +174,13 @@ legend("topright",  # Places the legend in the top left corner of the plot
 We can see samples are well divided into 2 clusters by tissue. This plot could convince us of the correctness of the experiment and data.
 Randomly select 6 samples and plot them to check the effect of normalization
 ```{r}
+# Filter out genes with low mean normalized counts (no need to do it as there's
+# no gene could be filterd out here)
+#avg_log_cpm <- rowMeans(cpm(dge.data, log=TRUE))
+#min_log_cpm <- 0.5  # For example, log2 CPM of 0.5
+#keep <- avg_log_cpm > min_log_cpm
+#counts_filtered_final <- counts.matrix[keep, ]
+
 counts.data.normal <- cpm(dge.data) 
 
 # or log2 transformed:
