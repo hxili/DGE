@@ -49,6 +49,9 @@ We can explore if there's any TF decrease or increase because of aging
 03.24
 Add code to filter out genes with low mean normalized counts, but no gene can be 
 actually filtered out. So we commented this part of code.
+
+03.26
+Network analysis. Go enrichment
 --------------------------------------------------------------------------------
 
 To do list
