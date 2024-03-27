@@ -6,6 +6,17 @@ output:
 ---
 
 ```{r}
+# 2024.3.24
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#BiocManager::install("biomaRt")
+
+#library(biomaRt)
+
+```
+
+```{r}
+
 library(tidyverse)
 #library(stringr)
 #library(dplyr)
@@ -26,6 +37,7 @@ python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 
 ```{r}
 # Load count data
 counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
+
 samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt")
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
@@ -48,6 +60,8 @@ ids <- tiss1.sampid %>%
 
 counts.data <- counts.data %>% 
   select(matches(ids))
+
+all.genes <- counts.data$Description
 
 # For our subsequent analyses we want to reduce the data set to only those genes with some expression. In this case we will discard genes with no reads in >= 50 samples
 counts.data <- counts.data[rowSums(counts.data[,-1]==0)<50,]
@@ -371,8 +385,8 @@ clus_summary %>% ggplot(aes(x=sample_group, y=expression, group=gene_index)) + #
 ```
 ```{r}
 #  Co-Expression
-## Get DGEs
-DEgenes <- topTags(ts.lrt,n = Inf,p.value = 0.05)$table
+## Get DGEs (Tissue as variable)
+DEgenes <- topTags(ts.lrt,n = Inf,p.value = 0.01)$table
 voom_E_ts <- voom_E %>%
   filter(GeneID %in% rownames(DEgenes))
 
@@ -439,9 +453,138 @@ The increase of average path length can be caused by the dramatic increase of nu
 ```{r}
 # The most central genes
 ## Calculate degree centrality
-colSums(genes_adj_MR4) %>%
+MR4_DC <- colSums(genes_adj_MR4) %>%
+  sort(decreasing = TRUE) %>%
+  tibble(GeneID=names(.), degree=.)
+
+MR10_DC <- colSums(genes_adj_MR10) %>%
   sort(decreasing = TRUE) %>%
   tibble(GeneID=names(.), degree=.)
 ```
 
+```{r, eval=FALSE}
+## Download annotations
+# Load necessary libraries
+library(biomaRt)
+
+# Select the human dataset
+mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+attributes <- listAttributes(mart)
+
+# Get annotations for your genes
+# Note: 'GeneID' could be replaced by 'hgnc_symbol' or other attributes if you are using gene symbols or other identifiers
+annotations1 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'phenotype_description'),
+                     filters = 'hgnc_symbol',
+                     values = counts.data$Description,
+                     mart = mart)
+
+annotations2 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'goslim_goa_description'),
+                     filters = 'hgnc_symbol',
+                     values = counts.data$Description,
+                     mart = mart)
+
+annotations3 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'mim_gene_description'),
+                     filters = 'hgnc_symbol',
+                     values = counts.data$Description,
+                     mart = mart)
+
+annotations4 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'mim_morbid_description'),
+                     filters = 'hgnc_symbol',
+                     values = counts.data$Description,
+                     mart = mart)
+
+go.terms <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'name_1006'),
+                     filters = 'hgnc_symbol',
+                     values = all.genes,
+                     mart = mart)
+
+write.csv(annotations,"../Output/name_1006.csv")
+
+gene.lengths <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'transcript_length'),
+                     filters = 'hgnc_symbol',
+                     values = counts.data$Description,
+                     mart = mart)
+
+annotations <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'interpro_description'),
+                     filters = 'hgnc_symbol',
+                     values = counts.data$Description,
+                     mart = mart)
+
+annotations <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'definition_1006'),
+                     filters = 'hgnc_symbol',
+                     values = counts.data$Description,
+                     mart = mart)
+
+
+# Merge with your original tibble to ensure all genes are included, even if no annotation is found
+result <- merge(genes_of_interest, annotations, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
+
+# Replace NA descriptions with "No annotation found"
+result$description[is.na(result$description)] <- "No annotation found"
+
+# View the result
+print(result)
+
+MR4_DC <- merge(MR4_DC, annotations1, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
+
+MR10_DC <- merge(MR10_DC, annotations1, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
+
+gene_graphMR10 %>%
+  betweenness() %>%
+  sort(decreasing=TRUE) %>%
+  head(1)
+```
+```{r}
+go.terms <- read_csv("../input/go_terms.csv")
+head(go.terms)
+colnames(go.terms) <- c("GeneID","GO")
+head(go.terms)
+
+gene.lengths <- read_csv("../input/gene_lengths.csv")
+head(gene.lengths)
+colnames(gene.lengths) <- c("GeneID","Length")
+head(gene.lengths)
+
+gene.lengths.vector <- gene.lengths$Length[gene.lengths$GeneID %in% all.genes]
+names(gene.lengths.vector) <- gene.lengths$GeneID[gene.lengths$GeneID %in% all.genes]
+head(gene.lengths.vector)
+
+#all.genes <- genes
+#genes <- all.genes
+all.genes <- tibble(unique(all.genes))
+colnames(all.genes) <- c("GeneID")
+
+#Do the reverse to make sure everything matches up (it seems that we don't have length info for some genes?)
+expressed.genes.match <- all.genes[all.genes$GeneID %in% names(gene.lengths.vector),]
+
+go.list <- strsplit(go.terms$GO,split=",")
+names(go.list) <- go.terms$GeneID
+head(go.list)
+
+#for each gene in expressed gene, return FALSE if it is not in DEgenes and TRUE if it is.
+DE.ts <- expressed.genes.match$GeneID %in% rownames(DEgenes)
+names(DE.ts) <- expressed.genes.match$GeneID
+head(DE.ts)
+
+DE.ts <- as.numeric(DE.ts) #convert to 0s and 1s
+head(DE.ts)
+sum(DE.ts) # number of DE genes
+
+
+#determines if there is bias due to gene length.  The plot shows the relationship.
+library(goseq)
+
+nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
+
+#calculate p-values for each GO term
+rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp()
+GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
+
+#list over-represented GO terms (p < 0.05)
+GO.out[GO.out$over_represented_pvalue < 0.05,]
+
+write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
+
+```
 
