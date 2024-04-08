@@ -535,6 +535,7 @@ gene_graphMR10 %>%
   sort(decreasing=TRUE) %>%
   head(1)
 ```
+
 ```{r}
 go.terms <- read_csv("../input/go_terms.csv")
 head(go.terms)
@@ -584,7 +585,27 @@ GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
 #list over-represented GO terms (p < 0.05)
 GO.out[GO.out$over_represented_pvalue < 0.05,]
 
-write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
+#write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
+
+GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
+
+# Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
+# Convert p-values to -log10 scale for better visualization
+GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
+
+# Create a TreeMap where each rectangle's size is based on the -log10 p-value (or any other measure of effect size you prefer)
+library(treemap)
+treemap(GO.out,
+        index = "category",  # GO term identifiers
+        vSize = "logPvalue",  # Value determining the size of the rectangles
+        vColor = "logPvalue",  # Value determining the color gradient (optional)
+        title = "Over-represented GO Terms in DE Genes",
+        fontsize.title = 14,
+        palette = "RdYlGn",  # Color palette
+        border.col = "black",  # Border color
+        fontcolor.labels = "black",  # Font color for labels
+        fontface.labels = "bold"  # Font face for labels
+)
 
 ```
 
