@@ -61,7 +61,7 @@ ids <- tiss1.sampid %>%
 counts.data <- counts.data %>% 
   select(matches(ids))
 
-all.genes <- counts.data$Description
+genelist <- counts.data$Description
 
 # For our subsequent analyses we want to reduce the data set to only those genes with some expression. In this case we will discard genes with no reads in >= 50 samples
 counts.data <- counts.data[rowSums(counts.data[,-1]==0)<50,]
@@ -537,6 +537,7 @@ gene_graphMR10 %>%
 ```
 
 ```{r}
+all.genes <- genelist
 go.terms <- read_csv("../input/go_terms.csv")
 head(go.terms)
 colnames(go.terms) <- c("GeneID","GO")
@@ -606,6 +607,30 @@ treemap(GO.out,
         fontcolor.labels = "black",  # Font color for labels
         fontface.labels = "bold"  # Font face for labels
 )
+```
 
+```{r}
+library(clusterProfiler)
+library(org.Hs.eg.db)
+
+sig_genes <- rownames(DEgenes)
+entrez_ids <- unlist(mapIds(org.Hs.eg.db,
+                            keys = sig_genes,
+                            column = "ENTREZID",
+                            keytype = "SYMBOL",
+                            multiVals = "first"))
+
+entrez_ids <- entrez_ids[!is.na(entrez_ids)]
+
+# Perform KEGG enrichment analysis
+kegg_result <- enrichKEGG(gene = entrez_ids,
+                          organism = 'hsa', # Assuming human genes
+                          keyType = 'ncbi-geneid')
+
+# Viewing the first few results
+head(kegg_result)
+
+# Optional: Visualize the results
+dotplot(kegg_result) + ggplot2::theme_minimal()
 ```
 
