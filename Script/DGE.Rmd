@@ -35,6 +35,9 @@ python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 
 ```
 
 ```{r}
+tissue1 <- 'Brain'
+tissue2 <- 'Liver'
+
 # Load count data
 counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
 
@@ -42,24 +45,37 @@ samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttribut
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
 
+counts.data.backup <- counts.data
+
 # Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should include all the data
 tiss1.sampid <- samp.anno.data %>%
-  filter(SMTS=='Ovary') %>% 
+  filter(SMTS==tissue1) %>% 
   select(SAMPID)
 
 tiss2.sampid <- samp.anno.data %>% 
-  filter(SMTS=='Testis') %>% 
+  filter(SMTS==tissue2) %>% 
   select(SAMPID)
 
+#counts.data <- counts.data.backup
+
+#ids <- tiss1.sampid %>% 
+#  bind_rows(tiss2.sampid) %>% 
+#  add_row(SAMPID='Description') %>% 
+#  pull() %>% 
+#  paste(collapse="|")
 
 ids <- tiss1.sampid %>% 
   bind_rows(tiss2.sampid) %>% 
   add_row(SAMPID='Description') %>% 
-  pull() %>% 
-  paste(collapse="|")
+  .$SAMPID
 
-counts.data <- counts.data %>% 
-  select(matches(ids))
+counts.data <- counts.data %>%
+  select(any_of(ids))
+
+missing_ids <- ids[!ids %in% colnames(counts.data)]
+
+#counts.data <- counts.data %>% 
+#  select(matches(ids))
 
 genelist <- counts.data$Description
 
@@ -71,10 +87,10 @@ counts.data <- counts.data[rowSums(counts.data[,-1]==0)<50,]
 
 # Create a tibble for edgeR description
 tiss1.sampid <- tiss1.sampid %>% 
-  mutate(TS='Ovary')
+  mutate(TS=tissue1)
 
 tiss2.sampid <- tiss2.sampid %>% 
-  mutate(TS='Testis')
+  mutate(TS=tissue2)
 ```
 Before we can normalize the data we need to be able to tell edgeR which groups the samples belong to. Here group refers to the distinct sample types (i.e. combinations of tissue, age, death circumstance)
 ```{r}
@@ -86,7 +102,7 @@ sample.description <- tiss1.sampid %>%
   select(-SUBJID)
 
 sample.description <- sample.description %>%
-  mutate(TS=factor(TS,levels = c("Testis","Ovary")), # setting the levels in this way makes "Testis" the reference  
+  mutate(TS=factor(TS,levels = c(tissue2,tissue1)), # setting the levels in this way makes "Testis" the reference  
          SEX=factor(SEX,levels = c(1,2)),
          AGE=factor(AGE,levels = c("20-29","30-39","40-49","50-59","60-69","70-79")),
          DTHHRDY=factor(DTHHRDY,levels = c(0,1,2,3,4)))
@@ -111,7 +127,7 @@ dge.data$samples
 
 # Try to find out if sample can be divided by variables (i.e. TS, AGE, SEX)
 plot_info <- sample.description %>% 
-  mutate(col=ifelse(TS=="Testis","#000000","#FFFFFF"),
+  mutate(col=ifelse(TS==tissue2,"#000000","#FFFFFF"),
          pch=ifelse(SEX==1,21,24),
          bg=case_when(AGE=="20-29"~"#1F77B4",
                        AGE=="30-39"~"#FF7F0E",
@@ -148,7 +164,7 @@ sex_symbols <- c(21, 24)
 sex_labels <- c("Male", "Female")
 
 # Tissue outline colors
-ts_groups <- c("Testis", "Ovary")
+ts_groups <- c(tissue2, tissue1)
 ts_colors <- c("#000000","#FFFFFF")
 
 
@@ -255,7 +271,7 @@ plotBCV(dge.data)
 # Find genes that expressed differently in these 2 tissues
 fit <- glmFit(dge.data, design)
 
-ts.lrt <- glmLRT(fit,coef = "TSOvary")
+ts.lrt <- glmLRT(fit,coef = paste("TS",tissue1,sep=''))
 
 # label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
