@@ -114,7 +114,7 @@ sample.description <- sample.description %>%
   mutate(
     TS = factor(TS, levels = unique(TS)),
     SEX = factor(SEX, levels = sort(unique(SEX))),  # numeric should be sorted
-    AGE = factor(AGE, levels = unique(AGE)),  # just let the unique order as is
+    AGE = factor(AGE, levels = c("20-29", "30-39", "40-49", "50-59", "60-69", "70-79")),
     DTHHRDY = factor(DTHHRDY, levels = sort(unique(DTHHRDY)))  # sort numerically
   )
 
@@ -126,7 +126,7 @@ counts.matrix <- counts.data %>% select(-Description) %>% as.matrix()
 rownames(counts.matrix) <- counts.data$Description
 
 sample.description <- tibble(SAMPID=colnames(counts.matrix)) %>%
-  left_join(sample.description)
+  left_join(sample.description, by = join_by(SAMPID))
 
 dge.data <- DGEList(counts=counts.matrix, 
                     group=sample.description$group)
@@ -145,6 +145,81 @@ dge.data$samples
 
 ```{r}
 # Assuming sample.description is your data frame
+#plot_info <- sample.description %>%
+#  mutate(
+#    AGE = factor(AGE),
+#    SEX = factor(SEX, levels = c(1, 2), labels = c("Male", "Female")),
+#    TS = factor(TS)  # TS column is same as SMTSD
+#  )
+
+plot_info <- sample.description %>%
+  mutate(
+    SEX = ifelse(is.na(SEX), "Unknown", SEX),  # Handle missing SEX
+    SEX = factor(SEX, levels = c(1, 2, "Unknown"), labels = c("Male", "Female", "Unknown")),
+    TS = factor(TS),
+    AGE = as.character(AGE), #When AGE is a factor and ifelse() is used, it doesn't handle factors gracefully
+    AGE = ifelse(is.na(AGE), "Unknown", AGE),# Handle missing AGE
+    AGE = factor(AGE, levels = c("20-29", "30-39", "40-49", "50-59", "60-69", "70-79", "Unknown"))
+      )
+
+
+# Define colors and shapes dynamically
+#library(RColorBrewer)
+#display.brewer.pal(12, "Set3")
+
+#colors_age <- RColorBrewer::brewer.pal(n = length(unique(plot_info$AGE)), name = "Set1")
+#colors_tissue <- RColorBrewer::brewer.pal(n = length(unique(plot_info$TS)), name = "Set3")
+
+#colors_tissue <- RColorBrewer::brewer.pal(n = length(unique(plot_info$TS)), name = "Set3")
+colors_tissue <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set3"))(length(unique(plot_info$TS)))
+
+# Assign colors and shapes
+#plot_info <- plot_info %>%
+#  mutate(
+#    col = colors_tissue[TS],  # Tissue colors
+#    bg = colors_age[AGE],     # Age background colors
+#    pch = ifelse(SEX == "Male", 21, 24)  # Sex shapes
+#  )
+
+#plot_info <- plot_info %>%
+#  mutate(
+#    bg = colors_tissue[TS],  # Tissue background colors
+#    pch = ifelse(SEX == "Male", 21, 24)  # Sex shapes
+#  )
+
+plot_info <- plot_info %>%
+  mutate(
+    bg = colors_tissue[TS], # Tissue colors
+    pch = ifelse(SEX == "Male", 21, ifelse(SEX == "Female", 24, 22))  # Shape: default for unknown
+  )
+
+
+matched_bgs <- plot_info$bg[match(colnames(dge.data), plot_info$SAMPID)]
+matched_pchs <- plot_info$pch[match(colnames(dge.data), plot_info$SAMPID)]
+#matched_cols <- plot_info$col[match(colnames(dge.data), plot_info$SAMPID)]
+
+
+# Increase the right margin to make space for the legend
+par(mar=c(5, 4, 4, 8) + 0.1)  # Default is c(5, 4, 4, 2) + 0.1
+
+
+
+#plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
+#        cex=1.4, dim.plot=c(1,2))
+
+plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,cex=1.4, 
+        dim.plot=c(1,2))
+ 
+# Adding a legend for Age outside the bottom of the plot
+#legend("topright", inset=c(-0.2, 0.2), title="Age", legend=levels(plot_info$AGE), fill=unique(plot_info$bg), cex=0.8, y.intersp=0.7, xpd=TRUE)
+# Adding a legend for Sex outside the top left of the plot
+legend("topright", inset=c(-0.2, 0), title="Sex", legend=levels(plot_info$SEX), pch=unique(plot_info$pch), cex=0.8, y.intersp=0.7, xpd=TRUE)
+# Adding a legend for Tissue outside the top right of the plot
+legend("bottomright", inset=c(-0.2, 0), title="Tissue", legend=levels(plot_info$TS), fill=unique(plot_info$bg), pch=21, cex=0.8, y.intersp=0.7, border=unique(plot_info$bg), xpd=TRUE)
+```
+
+```{r}
+# Assuming sample.description is your data frame
 plot_info <- sample.description %>%
   mutate(
     AGE = factor(AGE),
@@ -158,21 +233,29 @@ plot_info <- sample.description %>%
 
 #colors_age <- RColorBrewer::brewer.pal(n = length(unique(plot_info$AGE)), name = "Set1")
 #colors_tissue <- RColorBrewer::brewer.pal(n = length(unique(plot_info$TS)), name = "Set3")
-colors_tissue <- RColorBrewer::brewer.pal(n = length(unique(plot_info$TS)), name = "Set3")
+
+#colors_age <- RColorBrewer::brewer.pal(n = length(unique(plot_info$AGE)), name = "Set3")
+colors_age <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set3"))(length(unique(plot_info$AGE)))
 
 
 # Assign colors and shapes
+#plot_info <- plot_info %>%
+#  mutate(
+#    col = colors_tissue[TS],  # Tissue colors
+#    bg = colors_age[AGE],     # Age background colors
+#    pch = ifelse(SEX == "Male", 21, 24)  # Sex shapes
+#  )
+
 plot_info <- plot_info %>%
   mutate(
-    col = colors_tissue[TS],  # Tissue colors
-    bg = colors_age[AGE],     # Age background colors
+    bg = colors_age[AGE],  # Tissue background colors
     pch = ifelse(SEX == "Male", 21, 24)  # Sex shapes
   )
 
 
 matched_bgs <- plot_info$bg[match(colnames(dge.data), plot_info$SAMPID)]
 matched_pchs <- plot_info$pch[match(colnames(dge.data), plot_info$SAMPID)]
-matched_cols <- plot_info$col[match(colnames(dge.data), plot_info$SAMPID)]
+#matched_cols <- plot_info$col[match(colnames(dge.data), plot_info$SAMPID)]
 
 
 # Increase the right margin to make space for the legend
@@ -180,16 +263,20 @@ par(mar=c(5, 4, 4, 8) + 0.1)  # Default is c(5, 4, 4, 2) + 0.1
 
 
 
-plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
-        cex=1.4, dim.plot=c(1,2))
+#plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
+#        cex=1.4, dim.plot=c(1,2))
+
+plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,cex=1.4, 
+        dim.plot=c(1,2))
  
 # Adding a legend for Age outside the bottom of the plot
-legend("bottomright", inset=c(-0.2, 0), title="Age", legend=levels(plot_info$AGE), fill=unique(plot_info$bg), cex=0.8, y.intersp=0.7, xpd=TRUE)
+#legend("topright", inset=c(-0.2, 0.2), title="Age", legend=levels(plot_info$AGE), fill=unique(plot_info$bg), cex=0.8, y.intersp=0.7, xpd=TRUE)
 # Adding a legend for Sex outside the top left of the plot
 legend("topright", inset=c(-0.2, 0), title="Sex", legend=levels(plot_info$SEX), pch=unique(plot_info$pch), cex=0.8, y.intersp=0.7, xpd=TRUE)
 # Adding a legend for Tissue outside the top right of the plot
-legend("topright", inset=c(-0.2, 0.2), title="Tissue", legend=levels(plot_info$TS), fill=unique(plot_info$col), pch=21, cex=0.8, y.intersp=0.7, border=unique(plot_info$col), xpd=TRUE)
+legend("bottomright", inset=c(-0.2, 0), title="Age", legend=levels(plot_info$AGE), fill=unique(plot_info$bg), pch=21, cex=0.8, y.intersp=0.7, border=unique(plot_info$bg), xpd=TRUE)
 ```
+
 We can see samples are well divided into 2 clusters by tissue. This plot could convince us of the correctness of the experiment and data.
 Randomly select 6 samples and plot them to check the effect of normalization
 ```{r}
