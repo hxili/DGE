@@ -35,7 +35,7 @@ python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 
 ```
 
 ```{r}
-tissue1 <- 'Brain'
+tissue1 <- 'Testis'
 
 # Load count data
 counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
@@ -200,7 +200,7 @@ matched_pchs <- plot_info$pch[match(colnames(dge.data), plot_info$SAMPID)]
 
 
 # Increase the right margin to make space for the legend
-par(mar=c(5, 4, 4, 8) + 0.1)  # Default is c(5, 4, 4, 2) + 0.1
+par(mar=c(5, 4, 4, 12) + 0.1)  # Default is c(5, 4, 4, 2) + 0.1
 
 
 
@@ -213,9 +213,9 @@ plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,cex=1.4,
 # Adding a legend for Age outside the bottom of the plot
 #legend("topright", inset=c(-0.2, 0.2), title="Age", legend=levels(plot_info$AGE), fill=unique(plot_info$bg), cex=0.8, y.intersp=0.7, xpd=TRUE)
 # Adding a legend for Sex outside the top left of the plot
-legend("topright", inset=c(-0.2, 0), title="Sex", legend=levels(plot_info$SEX), pch=unique(plot_info$pch), cex=0.8, y.intersp=0.7, xpd=TRUE)
+legend("topright", inset=c(-0.2, 0), title="Sex", legend=levels(plot_info$SEX), pch=unique(plot_info$pch), cex=0.6, y.intersp=0.7, xpd=TRUE)
 # Adding a legend for Tissue outside the top right of the plot
-legend("bottomright", inset=c(-0.2, 0), title="Tissue", legend=levels(plot_info$TS), fill=unique(plot_info$bg), pch=21, cex=0.8, y.intersp=0.7, border=unique(plot_info$bg), xpd=TRUE)
+legend("bottomright", inset=c(-0.6, 0), title="Tissue", legend=levels(plot_info$TS), fill=unique(plot_info$bg), pch=21, cex=0.6, y.intersp=0.7, border=unique(plot_info$bg), xpd=TRUE)
 ```
 
 ```{r}
