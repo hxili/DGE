@@ -35,8 +35,8 @@ python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 
 ```
 
 ```{r}
-tissue1 <- 'Brain'
-tissue2 <- 'Liver'
+tissue1 <- 'Ovary'
+tissue2 <- 'Testis'
 
 # Load count data
 counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
@@ -215,6 +215,12 @@ counts.data.normal <- cpm(dge.data)
 
 # or log2 transformed:
 counts.data.normal.log <- cpm(dge.data,log = TRUE)
+
+# Assuming the first column might be non-numeric and should be excluded from the operation
+counts.data[,-1] <- sapply(counts.data[,-1], function(x) as.numeric(as.character(x)))
+
+# Check if there are any NAs introduced by incorrect conversions
+sum(is.na(counts.data))
 
 counts.data.log <- log2(counts.data[,-1] + 1)
 
@@ -478,78 +484,60 @@ MR10_DC <- colSums(genes_adj_MR10) %>%
   tibble(GeneID=names(.), degree=.)
 ```
 
-```{r, eval=FALSE}
+```{r}
 ## Download annotations
 # Load necessary libraries
-library(biomaRt)
+#library(biomaRt)
 
 # Select the human dataset
-mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+#mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
 
-attributes <- listAttributes(mart)
+#attributes <- listAttributes(mart)
 
 # Get annotations for your genes
 # Note: 'GeneID' could be replaced by 'hgnc_symbol' or other attributes if you are using gene symbols or other identifiers
-annotations1 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'phenotype_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+#go.terms <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'name_1006'),
+#                     filters = 'hgnc_symbol',
+#                     values = all.genes,
+#                     mart = mart)
 
-annotations2 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'goslim_goa_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+#gene.lengths <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'transcript_length'),
+#                     filters = 'hgnc_symbol',
+#                     values = counts.data$Description,
+#                     mart = mart)
 
-annotations3 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'mim_gene_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+#annotations <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'mim_gene_description'),
+#                     filters = 'hgnc_symbol',
+#                     values = genelist,
+#                     mart = mart)
 
-annotations4 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'mim_morbid_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+#write.csv(annotations,paste("../Output/", colnames(annotations)[3], ".csv", sep=""))
 
-go.terms <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'name_1006'),
-                     filters = 'hgnc_symbol',
-                     values = all.genes,
-                     mart = mart)
+annotations <- read_csv("../Output/interpro_description.csv")
 
-write.csv(annotations,"../Output/name_1006.csv")
+annotations <- na.omit(annotations) %>% 
+  .[,2:4] %>% 
+  group_by(ensembl_gene_id, hgnc_symbol) %>%
+  summarise(
+    interpro_description = paste("\"",interpro_description,"\"",collapse = ", "),
+    .groups = 'drop'  # This option removes grouping after summarise
+  )
 
-gene.lengths <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'transcript_length'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+MR4_DC <- merge(MR4_DC, annotations, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
 
-annotations <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'interpro_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+MR4_DC <- MR4_DC[order(-MR4_DC$degree),]
 
-annotations <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'definition_1006'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+MR10_DC <- merge(MR10_DC, annotations, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
 
+MR10_DC <- MR10_DC[order(-MR10_DC$degree),]
 
-# Merge with your original tibble to ensure all genes are included, even if no annotation is found
-result <- merge(genes_of_interest, annotations, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
-
-# Replace NA descriptions with "No annotation found"
-result$description[is.na(result$description)] <- "No annotation found"
-
-# View the result
-print(result)
-
-MR4_DC <- merge(MR4_DC, annotations1, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
-
-MR10_DC <- merge(MR10_DC, annotations1, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
+head(MR4_DC)
+head(MR10_DC)
 
 gene_graphMR10 %>%
   betweenness() %>%
   sort(decreasing=TRUE) %>%
-  head(1)
+  head(5)
 ```
 
 ```{r}
