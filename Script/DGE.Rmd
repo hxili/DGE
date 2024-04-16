@@ -16,7 +16,6 @@ output:
 ```
 
 ```{r}
-
 library(tidyverse)
 #library(stringr)
 #library(dplyr)
@@ -28,6 +27,10 @@ library(pvclust)
 library(gplots)
 library(cluster)
 library(igraph)
+library(goseq)
+library(treemap)
+library(clusterProfiler)
+library(org.Hs.eg.db)
 ```
 First we copy the [list of SLCs in mammalian genomes](https://esbl.nhlbi.nih.gov/Databases/SLC-list/) and convert gene IDs to ENSG IDs with tool on this [page](https://biit.cs.ut.ee/gprofiler/convert).Then we can select all SLCs in GTEx gene counts data file with `filter.py` in terminal.
 ```{bash, eval=FALSE}
@@ -496,10 +499,18 @@ MR10_DC <- colSums(genes_adj_MR10) %>%
 
 # Get annotations for your genes
 # Note: 'GeneID' could be replaced by 'hgnc_symbol' or other attributes if you are using gene symbols or other identifiers
-#go.terms <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'name_1006'),
+#go.terms <- getBM(attributes = c('hgnc_symbol', 'name_1006', 'namespace_1003'),
 #                     filters = 'hgnc_symbol',
 #                     values = all.genes,
 #                     mart = mart)
+
+#write.csv(go.terms,"../Input/go_domains.csv")
+
+#go.domains <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'namespace_1003'),
+#                     filters = 'hgnc_symbol',
+#                     values = all.genes,
+#                     mart = mart)
+#write.csv(go.domains,"../Output/go_domains.csv")
 
 #gene.lengths <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'transcript_length'),
 #                     filters = 'hgnc_symbol',
@@ -542,12 +553,20 @@ gene_graphMR10 %>%
 
 ```{r}
 all.genes <- genelist
-go.terms <- read_csv("../input/go_terms.csv")
+go.terms <- read_csv("../Input/go_terms.csv")
 head(go.terms)
 colnames(go.terms) <- c("GeneID","GO")
 head(go.terms)
 
-gene.lengths <- read_csv("../input/gene_lengths.csv")
+go.domains <- read_csv("../Input/go_domains.csv")
+colnames(go.domains)[3:4] <- c("category","GO_domains")
+
+go.domains <- na.omit(go.domains) %>% 
+  .[,3:4] %>% 
+  group_by(category,GO_domains) %>%
+  summarise(.groups = 'drop')
+
+gene.lengths <- read_csv("../Input/gene_lengths.csv")
 head(gene.lengths)
 colnames(gene.lengths) <- c("GeneID","Length")
 head(gene.lengths)
@@ -579,7 +598,61 @@ sum(DE.ts) # number of DE genes
 
 
 #determines if there is bias due to gene length.  The plot shows the relationship.
-library(goseq)
+#library(goseq)
+
+nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
+
+#calculate p-values for each GO term
+rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp()
+GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
+
+GO.out <- left_join(GO.out,go.domains,by="category")
+
+#list over-represented GO terms (p < 0.05)
+GO.out[GO.out$over_represented_pvalue < 0.05,]
+
+#write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
+
+GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
+
+# Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
+# Convert p-values to -log10 scale for better visualization
+GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
+
+GO.out <- left_join(GO.out,go.domains,by="category")
+
+# Create a TreeMap where each rectangle's size is based on the -log10 p-value (or any other measure of effect size you prefer)
+#library(treemap)
+treemap(GO.out,
+        index = "category",  # GO term identifiers
+        vSize = "logPvalue",  # Value determining the size of the rectangles
+        vColor = "logPvalue",  # Value determining the color gradient (optional)
+        title = "Over-represented GO Terms in DE Genes",
+        fontsize.title = 14,
+        palette = "RdYlGn",  # Color palette
+        border.col = "black",  # Border color
+        fontcolor.labels = "black",  # Font color for labels
+        fontface.labels = "bold"  # Font face for labels
+)
+```
+
+```{r}
+##GO enrichment analysis of up-regulated genes
+#for each gene in expressed gene, return FALSE if it is not in DEgenes and TRUE if it is.
+over_expressed_genes <- DEgenes %>%
+  filter(logFC > 0)
+DE.ts <- expressed.genes.match$GeneID %in% rownames(over_expressed_genes)
+
+names(DE.ts) <- expressed.genes.match$GeneID
+head(DE.ts)
+
+DE.ts <- as.numeric(DE.ts) #convert to 0s and 1s
+head(DE.ts)
+sum(DE.ts) # number of DE genes
+
+
+#determines if there is bias due to gene length.  The plot shows the relationship.
+#library(goseq)
 
 nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
 
@@ -599,12 +672,62 @@ GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
 GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
 
 # Create a TreeMap where each rectangle's size is based on the -log10 p-value (or any other measure of effect size you prefer)
-library(treemap)
+#library(treemap)
 treemap(GO.out,
         index = "category",  # GO term identifiers
         vSize = "logPvalue",  # Value determining the size of the rectangles
         vColor = "logPvalue",  # Value determining the color gradient (optional)
-        title = "Over-represented GO Terms in DE Genes",
+        title = "Over-represented GO Terms in Up-regulated Genes",
+        fontsize.title = 14,
+        palette = "RdYlGn",  # Color palette
+        border.col = "black",  # Border color
+        fontcolor.labels = "black",  # Font color for labels
+        fontface.labels = "bold"  # Font face for labels
+)
+
+```
+```{r}
+##GO enrichment analysis of up-regulated genes
+#for each gene in expressed gene, return FALSE if it is not in DEgenes and TRUE if it is.
+down_expressed_genes <- DEgenes %>%
+  filter(logFC < 0)
+DE.ts <- expressed.genes.match$GeneID %in% rownames(down_expressed_genes)
+
+names(DE.ts) <- expressed.genes.match$GeneID
+head(DE.ts)
+
+DE.ts <- as.numeric(DE.ts) #convert to 0s and 1s
+head(DE.ts)
+sum(DE.ts) # number of DE genes
+
+
+#determines if there is bias due to gene length.  The plot shows the relationship.
+#library(goseq)
+
+nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
+
+#calculate p-values for each GO term
+rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp()
+GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
+
+#list over-represented GO terms (p < 0.05)
+GO.out[GO.out$over_represented_pvalue < 0.05,]
+
+#write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
+
+GO.out <- GO.out[GO.out$over_represented_pvalue < 0.0001,]
+
+# Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
+# Convert p-values to -log10 scale for better visualization
+GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
+
+# Create a TreeMap where each rectangle's size is based on the -log10 p-value (or any other measure of effect size you prefer)
+#library(treemap)
+treemap(GO.out,
+        index = "category",  # GO term identifiers
+        vSize = "logPvalue",  # Value determining the size of the rectangles
+        vColor = "logPvalue",  # Value determining the color gradient (optional)
+        title = "Over-represented GO Terms in Up-regulated Genes",
         fontsize.title = 14,
         palette = "RdYlGn",  # Color palette
         border.col = "black",  # Border color
@@ -613,9 +736,10 @@ treemap(GO.out,
 )
 ```
 
+
 ```{r}
-library(clusterProfiler)
-library(org.Hs.eg.db)
+#library(clusterProfiler)
+#library(org.Hs.eg.db)
 
 sig_genes <- rownames(DEgenes)
 entrez_ids <- unlist(mapIds(org.Hs.eg.db,
