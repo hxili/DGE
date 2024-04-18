@@ -16,7 +16,6 @@ output:
 ```
 
 ```{r}
-
 library(tidyverse)
 #library(stringr)
 #library(dplyr)
@@ -28,6 +27,11 @@ library(pvclust)
 library(gplots)
 library(cluster)
 library(igraph)
+library(goseq)
+library(treemap)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(RColorBrewer)
 ```
 First we copy the [list of SLCs in mammalian genomes](https://esbl.nhlbi.nih.gov/Databases/SLC-list/) and convert gene IDs to ENSG IDs with tool on this [page](https://biit.cs.ut.ee/gprofiler/convert).Then we can select all SLCs in GTEx gene counts data file with `filter.py` in terminal.
 ```{bash, eval=FALSE}
@@ -35,18 +39,20 @@ python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 
 ```
 
 ```{r}
-tissue1 <- 'Testis'
+tissue1 <- 'Heart'
 
 # Load count data
-counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
+#counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
 
 samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt")
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
 
-counts.data.backup <- counts.data
+#counts.data.backup <- counts.data
+counts.data <- counts.data.backup
 
-#counts.data <- counts.data.backup
+select <- dplyr::select
+
 # Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should include all the data
 tiss1.sampid <- samp.anno.data %>%
   filter(SMTS==tissue1) %>% 
@@ -215,10 +221,10 @@ plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,cex=1.4,
 # Adding a legend for Sex outside the top left of the plot
 legend("topright", inset=c(-0.2, 0), title="Sex", legend=levels(plot_info$SEX), pch=unique(plot_info$pch), cex=0.6, y.intersp=0.7, xpd=TRUE)
 # Adding a legend for Tissue outside the top right of the plot
-legend("bottomright", inset=c(-0.6, 0), title="Tissue", legend=levels(plot_info$TS), fill=unique(plot_info$bg), pch=21, cex=0.6, y.intersp=0.7, border=unique(plot_info$bg), xpd=TRUE)
+legend("bottomright", inset=c(-0.45, 0), title="Tissue", legend=levels(plot_info$TS), fill=unique(plot_info$bg), pch=21, cex=0.6, y.intersp=0.7, border=unique(plot_info$bg), xpd=TRUE)
 ```
 
-```{r}
+```{r,eval=FALSE}
 # Assuming sample.description is your data frame
 plot_info <- sample.description %>%
   mutate(
@@ -292,6 +298,12 @@ counts.data.normal <- cpm(dge.data)
 # or log2 transformed:
 counts.data.normal.log <- cpm(dge.data,log = TRUE)
 
+# Assuming the first column might be non-numeric and should be excluded from the operation
+counts.data[,-1] <- sapply(counts.data[,-1], function(x) as.numeric(as.character(x)))
+
+# Check if there are any NAs introduced by incorrect conversions
+sum(is.na(counts.data))
+
 counts.data.log <- log2(counts.data[,-1] + 1)
 
 counts.data.log.pvt <- counts.data.log
@@ -305,7 +317,7 @@ counts.data.log.pvt <- sample.description %>%
 
 counts.data.log.pvt %>% ggplot(aes(x=group, y=value)) +
   geom_boxplot() +
-  theme(axis.text.x = element_text(angle = 70))
+  theme(axis.text.x = element_text(angle = 90))
 
 counts.data.normal.log.pvt <- as.data.frame(counts.data.normal.log)
   
@@ -319,7 +331,7 @@ counts.data.normal.log.pvt <- sample.description %>%
 
 counts.data.normal.log.pvt %>% ggplot(aes(x=group, y=value)) +
   geom_boxplot() +
-  theme(axis.text.x = element_text(angle = 70))
+  theme(axis.text.x = element_text(angle = 90))
 ```
 
 ```{r}
@@ -347,7 +359,7 @@ plotBCV(dge.data)
 # Find genes that expressed differently in these 2 tissues
 fit <- glmFit(dge.data, design)
 
-ts.lrt <- glmLRT(fit,coef = paste("TS",tissue1,sep=''))
+ts.lrt <- glmLRT(fit,coef="TSHeart - Left Ventricle")
 
 # label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
@@ -443,7 +455,7 @@ with(gap, maxSE(Tab[,"gap"], Tab[,"SE.sim"], method="firstSEmax"))
 
 # We now try 5 clusters
 set.seed(25)
-fit <- kmeans(E_matrix, 4)
+fit <- kmeans(E_matrix, 7)
 clus <- as.data.frame(fit$cluster)
 names(clus) <- paste("cluster")
 
@@ -557,85 +569,83 @@ MR10_DC <- colSums(genes_adj_MR10) %>%
 ```{r, eval=FALSE}
 ## Download annotations
 # Load necessary libraries
-library(biomaRt)
+#library(biomaRt)
 
 # Select the human dataset
-mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+#mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
 
-attributes <- listAttributes(mart)
+#attributes <- listAttributes(mart)
 
 # Get annotations for your genes
 # Note: 'GeneID' could be replaced by 'hgnc_symbol' or other attributes if you are using gene symbols or other identifiers
-annotations1 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'phenotype_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+#go.terms <- getBM(attributes = c('hgnc_symbol', 'name_1006', 'namespace_1003'),
+#                     filters = 'hgnc_symbol',
+#                     values = all.genes,
+#                     mart = mart)
 
-annotations2 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'goslim_goa_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+#write.csv(go.terms,"../Input/go_domains.csv")
 
-annotations3 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'mim_gene_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+#go.domains <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'namespace_1003'),
+#                     filters = 'hgnc_symbol',
+#                     values = all.genes,
+#                     mart = mart)
+#write.csv(go.domains,"../Output/go_domains.csv")
 
-annotations4 <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'mim_morbid_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+#gene.lengths <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'transcript_length'),
+#                     filters = 'hgnc_symbol',
+#                     values = counts.data$Description,
+#                     mart = mart)
 
-go.terms <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'name_1006'),
-                     filters = 'hgnc_symbol',
-                     values = all.genes,
-                     mart = mart)
+#annotations <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'mim_gene_description'),
+#                     filters = 'hgnc_symbol',
+#                     values = genelist,
+#                     mart = mart)
 
-write.csv(annotations,"../Output/name_1006.csv")
+#write.csv(annotations,paste("../Output/", colnames(annotations)[3], ".csv", sep=""))
 
-gene.lengths <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'transcript_length'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+annotations <- read_csv("../Output/interpro_description.csv")
 
-annotations <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'interpro_description'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+annotations <- na.omit(annotations) %>% 
+  .[,2:4] %>% 
+  group_by(ensembl_gene_id, hgnc_symbol) %>%
+  summarise(
+    interpro_description = paste("\"",interpro_description,"\"",collapse = ", "),
+    .groups = 'drop'  # This option removes grouping after summarise
+  )
 
-annotations <- getBM(attributes = c('ensembl_gene_id', 'hgnc_symbol', 'definition_1006'),
-                     filters = 'hgnc_symbol',
-                     values = counts.data$Description,
-                     mart = mart)
+MR4_DC <- merge(MR4_DC, annotations, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
 
+MR4_DC <- MR4_DC[order(-MR4_DC$degree),]
 
-# Merge with your original tibble to ensure all genes are included, even if no annotation is found
-result <- merge(genes_of_interest, annotations, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
+MR10_DC <- merge(MR10_DC, annotations, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
 
-# Replace NA descriptions with "No annotation found"
-result$description[is.na(result$description)] <- "No annotation found"
+MR10_DC <- MR10_DC[order(-MR10_DC$degree),]
 
-# View the result
-print(result)
-
-MR4_DC <- merge(MR4_DC, annotations1, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
-
-MR10_DC <- merge(MR10_DC, annotations1, by.x = "GeneID", by.y = "hgnc_symbol", all.x = TRUE)
+head(MR4_DC)
+head(MR10_DC)
 
 gene_graphMR10 %>%
   betweenness() %>%
   sort(decreasing=TRUE) %>%
-  head(1)
+  head(5)
 ```
 
 ```{r}
 all.genes <- genelist
-go.terms <- read_csv("../input/go_terms.csv")
+go.terms <- read_csv("../Input/go_terms.csv")
 head(go.terms)
 colnames(go.terms) <- c("GeneID","GO")
 head(go.terms)
 
-gene.lengths <- read_csv("../input/gene_lengths.csv")
+go.domains <- read_csv("../Input/go_domains.csv")
+colnames(go.domains)[3:4] <- c("category","GO_domains")
+
+go.domains <- na.omit(go.domains) %>% 
+  .[,3:4] %>% 
+  group_by(category,GO_domains) %>%
+  summarise(.groups = 'drop')
+
+gene.lengths <- read_csv("../Input/gene_lengths.csv")
 head(gene.lengths)
 colnames(gene.lengths) <- c("GeneID","Length")
 head(gene.lengths)
@@ -667,7 +677,62 @@ sum(DE.ts) # number of DE genes
 
 
 #determines if there is bias due to gene length.  The plot shows the relationship.
-library(goseq)
+#library(goseq)
+
+nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
+
+#calculate p-values for each GO term
+rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp()
+GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
+
+
+#list over-represented GO terms (p < 0.05)
+GO.out[GO.out$over_represented_pvalue < 0.05,]
+
+#write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
+
+GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
+
+# Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
+# Convert p-values to -log10 scale for better visualization
+GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
+
+GO.out <- left_join(GO.out,go.domains,by="category")
+
+domain_colors <- setNames(brewer.pal(length(unique(GO.out$GO_domains)), "Set3"), unique(GO.out$GO_domains))
+
+# Create a TreeMap where each rectangle's size is based on the -log10 p-value (or any other measure of effect size you prefer)
+#library(treemap)
+treemap(GO.out,
+        index = "category",  # GO term identifiers
+        vSize = "logPvalue",  # Value determining the size of the rectangles
+        vColor = "GO_domains",  # Assign color based on GO domains
+        title = "Over-represented GO Terms in DE Genes",
+        fontsize.title = 14,
+        palette = domain_colors,  # Custom color palette for GO domains
+        border.col = "black",  # Border color
+        fontcolor.labels = "black",  # Font color for labels for better visibility
+        fontface.labels = "bold"  # Font face for labels
+)
+```
+
+```{r}
+##GO enrichment analysis of up-regulated genes
+#for each gene in expressed gene, return FALSE if it is not in DEgenes and TRUE if it is.
+over_expressed_genes <- DEgenes %>%
+  filter(logFC > 0)
+DE.ts <- expressed.genes.match$GeneID %in% rownames(over_expressed_genes)
+
+names(DE.ts) <- expressed.genes.match$GeneID
+head(DE.ts)
+
+DE.ts <- as.numeric(DE.ts) #convert to 0s and 1s
+head(DE.ts)
+sum(DE.ts) # number of DE genes
+
+
+#determines if there is bias due to gene length.  The plot shows the relationship.
+#library(goseq)
 
 nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
 
@@ -687,23 +752,99 @@ GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
 GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
 
 # Create a TreeMap where each rectangle's size is based on the -log10 p-value (or any other measure of effect size you prefer)
-library(treemap)
+#library(treemap)
+#treemap(GO.out,
+#        index = "category",  # GO term identifiers
+#        vSize = "logPvalue",  # Value determining the size of the rectangles
+#        vColor = "logPvalue",  # Value determining the color gradient (optional)
+#        title = "Over-represented GO Terms in Up-regulated Genes",
+#        fontsize.title = 14,
+#        palette = "RdYlGn",  # Color palette
+#        border.col = "black",  # Border color
+#        fontcolor.labels = "black",  # Font color for labels
+#        fontface.labels = "bold"  # Font face for labels
+#)
+
+
+GO.out <- left_join(GO.out,go.domains,by="category")
+
+
+domain_colors <- setNames(brewer.pal(length(unique(GO.out$GO_domains)), "Set3"), unique(GO.out$GO_domains))
+
 treemap(GO.out,
         index = "category",  # GO term identifiers
         vSize = "logPvalue",  # Value determining the size of the rectangles
-        vColor = "logPvalue",  # Value determining the color gradient (optional)
-        title = "Over-represented GO Terms in DE Genes",
+        vColor = "GO_domains",  # Assign color based on GO domains
+        title = "Over-represented GO Terms in Up-regulated Genes",
         fontsize.title = 14,
-        palette = "RdYlGn",  # Color palette
+        palette = domain_colors,  # Custom color palette for GO domains
         border.col = "black",  # Border color
-        fontcolor.labels = "black",  # Font color for labels
+        fontcolor.labels = "black",  # Font color for labels for better visibility
         fontface.labels = "bold"  # Font face for labels
 )
+
 ```
 
 ```{r}
-library(clusterProfiler)
-library(org.Hs.eg.db)
+##GO enrichment analysis of up-regulated genes
+#for each gene in expressed gene, return FALSE if it is not in DEgenes and TRUE if it is.
+down_expressed_genes <- DEgenes %>%
+  filter(logFC < 0)
+DE.ts <- expressed.genes.match$GeneID %in% rownames(down_expressed_genes)
+
+names(DE.ts) <- expressed.genes.match$GeneID
+head(DE.ts)
+
+DE.ts <- as.numeric(DE.ts) #convert to 0s and 1s
+head(DE.ts)
+sum(DE.ts) # number of DE genes
+
+
+#determines if there is bias due to gene length.  The plot shows the relationship.
+#library(goseq)
+
+nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
+
+#calculate p-values for each GO term
+rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp()
+GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
+
+#list over-represented GO terms (p < 0.05)
+GO.out[GO.out$over_represented_pvalue < 0.05,]
+
+#write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
+
+GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
+
+# Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
+# Convert p-values to -log10 scale for better visualization
+GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
+
+# Create a TreeMap where each rectangle's size is based on the -log10 p-value (or any other measure of effect size you prefer)
+#library(treemap)
+
+GO.out <- left_join(GO.out,go.domains,by="category")
+
+
+domain_colors <- setNames(brewer.pal(length(unique(GO.out$GO_domains)), "Set3"), unique(GO.out$GO_domains))
+
+treemap(GO.out,
+        index = "category",  # GO term identifiers
+        vSize = "logPvalue",  # Value determining the size of the rectangles
+        vColor = "lGO_domains",  # Assign color based on GO domains
+        title = "Down-represented GO Terms in Up-regulated Genes",
+        fontsize.title = 14,
+        palette = domain_colors,  # Custom color palette for GO domains
+        border.col = "black",  # Border color
+        fontcolor.labels = "black",  # Font color for labels for better visibility
+        fontface.labels = "bold"  # Font face for labels
+)
+
+```
+
+```{r}
+#library(clusterProfiler)
+#library(org.Hs.eg.db)
 
 sig_genes <- rownames(DEgenes)
 entrez_ids <- unlist(mapIds(org.Hs.eg.db,
@@ -720,7 +861,7 @@ kegg_result <- enrichKEGG(gene = entrez_ids,
                           keyType = 'ncbi-geneid')
 
 # Viewing the first few results
-head(kegg_result)
+head(kegg_result,30)
 
 # Optional: Visualize the results
 dotplot(kegg_result) + ggplot2::theme_minimal()
