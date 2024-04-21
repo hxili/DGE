@@ -42,14 +42,14 @@ python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 
 tissue1 <- 'Heart'
 
 # Load count data
-#counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
+counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
 
 samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt")
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
 
 #counts.data.backup <- counts.data
-counts.data <- counts.data.backup
+#counts.data <- counts.data.backup
 
 select <- dplyr::select
 
@@ -566,7 +566,7 @@ MR10_DC <- colSums(genes_adj_MR10) %>%
   tibble(GeneID=names(.), degree=.)
 ```
 
-```{r, eval=FALSE}
+```{r}
 ## Download annotations
 # Load necessary libraries
 #library(biomaRt)

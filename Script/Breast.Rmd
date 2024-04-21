@@ -564,7 +564,7 @@ MR10_DC <- colSums(genes_adj_MR10) %>%
   tibble(GeneID=names(.), degree=.)
 ```
 
-```{r, eval=FALSE}
+```{r}
 ## Download annotations
 # Load necessary libraries
 #library(biomaRt)
@@ -619,13 +619,13 @@ MR10_DC <- merge(MR10_DC, annotations, by.x = "GeneID", by.y = "hgnc_symbol", al
 
 MR10_DC <- MR10_DC[order(-MR10_DC$degree),]
 
-head(MR4_DC)
-head(MR10_DC)
+head(MR4_DC,20)
+head(MR10_DC,20)
 
 gene_graphMR10 %>%
   betweenness() %>%
   sort(decreasing=TRUE) %>%
-  head(5)
+  head(20)
 ```
 
 ```{r}
