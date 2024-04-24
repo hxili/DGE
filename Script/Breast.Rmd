@@ -361,7 +361,7 @@ ts.lrt <- glmLRT(fit,coef="SEX2")
 
 # label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
-results$significant <- results$FDR < 0.05 & abs(results$logFC) > log2(1.5)
+results$significant <- results$FDR < 0.01 & abs(results$logFC) > log2(1)
 results$PValue <- pmax(results$PValue, 1e-300)  # replace exact 0s with a very small number
 
 results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Significant")

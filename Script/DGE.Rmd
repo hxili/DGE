@@ -51,6 +51,7 @@ counts.data <- counts.data[,-1]
 
 counts.data.backup <- counts.data
 
+select <- dplyr::select
 # Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should include all the data
 tiss1.sampid <- samp.anno.data %>%
   filter(SMTS==tissue1) %>% 
@@ -285,7 +286,7 @@ ts.lrt <- glmLRT(fit,coef = paste("TS",tissue1,sep=''))
 
 # label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
-results$significant <- results$FDR < 0.05 & abs(results$logFC) > log2(1.5)
+results$significant <- results$FDR < 0.01 & abs(results$logFC) > log2(1)
 results$PValue <- pmax(results$PValue, 1e-300)  # replace exact 0s with a very small number
 
 results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Significant")
@@ -735,7 +736,7 @@ GO.out[GO.out$over_represented_pvalue < 0.05,]
 
 #write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
 
-GO.out <- GO.out[GO.out$over_represented_pvalue < 0.0001,]
+GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
 
 # Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
 # Convert p-values to -log10 scale for better visualization
@@ -752,7 +753,7 @@ domain_colors <- setNames(brewer.pal(length(unique(GO.out$GO_domains)), "Set3"),
 treemap(GO.out,
         index = "category",  # GO term identifiers
         vSize = "logPvalue",  # Value determining the size of the rectangles
-        vColor = "lGO_domains",  # Assign color based on GO domains
+        vColor = "GO_domains",  # Assign color based on GO domains
         title = "Down-represented GO Terms in Up-regulated Genes",
         fontsize.title = 14,
         palette = domain_colors,  # Custom color palette for GO domains

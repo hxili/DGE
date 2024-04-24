@@ -39,26 +39,26 @@ python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 
 ```
 
 ```{r}
-tissue1 <- 'Ovary'
-tissue2 <- 'Testis'
+tissue1 <- 'Brain - Cortex'
+tissue2 <- 'Brain - Cerebellar Hemisphere'
 
 # Load count data
-counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
+#counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
 
 samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt")
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
 
-counts.data.backup <- counts.data
+#counts.data.backup <- counts.data
 
 select <- dplyr::select
 # Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should include all the data
 tiss1.sampid <- samp.anno.data %>%
-  filter(SMTS==tissue1) %>% 
+  filter(SMTSD==tissue1) %>% 
   select(SAMPID)
 
 tiss2.sampid <- samp.anno.data %>% 
-  filter(SMTS==tissue2) %>% 
+  filter(SMTSD==tissue2) %>% 
   select(SAMPID)
 
 counts.data <- counts.data.backup
@@ -128,82 +128,79 @@ dge.data <- DGEList(counts=counts.matrix,
 dge.data <- calcNormFactors(dge.data, method = "TMM")
 dge.data$samples
 
-# Make a plot of the Biological Coefficient of Variation of each sample
+# Assuming sample.description is your data frame
+#plot_info <- sample.description %>%
+#  mutate(
+#    AGE = factor(AGE),
+#    SEX = factor(SEX, levels = c(1, 2), labels = c("Male", "Female")),
+#    TS = factor(TS)  # TS column is same as SMTSD
+#  )
 
-# Try to find out if sample can be divided by variables (i.e. TS, AGE, SEX)
-plot_info <- sample.description %>% 
-  mutate(col=ifelse(TS==tissue2,"#000000","#FFFFFF"),
-         pch=ifelse(SEX==1,21,24),
-         bg=case_when(AGE=="20-29"~"#1F77B4",
-                       AGE=="30-39"~"#FF7F0E",
-                       AGE=="40-49"~"#2CA02C",
-                       AGE=="50-59"~"#D62728",
-                       AGE=="60-69"~"#9467BD",
-                       AGE=="70-79"~"#8C564B")
-    ) %>% 
-  select(SAMPID,bg,pch,col)
+plot_info <- sample.description %>%
+  mutate(
+    SEX = ifelse(is.na(SEX), "Unknown", SEX),  # Handle missing SEX
+    SEX = factor(SEX, levels = c(1, 2, "Unknown"), labels = c("Male", "Female", "Unknown")),
+    TS = factor(TS),
+    AGE = as.character(AGE), #When AGE is a factor and ifelse() is used, it doesn't handle factors gracefully
+    AGE = ifelse(is.na(AGE), "Unknown", AGE),# Handle missing AGE
+    AGE = factor(AGE, levels = c("20-29", "30-39", "40-49", "50-59", "60-69", "70-79", "Unknown"))
+      )
 
-# (i.e. TS, AGE, SEX, DTHHRDY)
-#plot_info <- sample.description %>% 
-#  mutate(col=ifelse(TS=="Testis","#000000","#FFFFFF"),
-#         pch=ifelse(SEX==1,21,24),
-#         bg=case_when(DTHHRDY==0~"#1F77B4",
-#                       DTHHRDY==1~"#FF7F0E",
-#                       DTHHRDY==2~"#2CA02C",
-#                       DTHHRDY==3~"#D62728",
-#                       DTHHRDY==4~"#9467BD",
-#                       TRUE~"#8C564B")
-#    ) %>% 
-#  select(SAMPID,bg,pch,col)
+
+# Define colors and shapes dynamically
+#library(RColorBrewer)
+#display.brewer.pal(12, "Set3")
+
+#colors_age <- RColorBrewer::brewer.pal(n = length(unique(plot_info$AGE)), name = "Set1")
+#colors_tissue <- RColorBrewer::brewer.pal(n = length(unique(plot_info$TS)), name = "Set3")
+
+#colors_tissue <- RColorBrewer::brewer.pal(n = length(unique(plot_info$TS)), name = "Set3")
+colors_tissue <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set3"))(length(unique(plot_info$TS)))
+
+# Assign colors and shapes
+#plot_info <- plot_info %>%
+#  mutate(
+#    col = colors_tissue[TS],  # Tissue colors
+#    bg = colors_age[AGE],     # Age background colors
+#    pch = ifelse(SEX == "Male", 21, 24)  # Sex shapes
+#  )
+
+#plot_info <- plot_info %>%
+#  mutate(
+#    bg = colors_tissue[TS],  # Tissue background colors
+#    pch = ifelse(SEX == "Male", 21, 24)  # Sex shapes
+#  )
+
+plot_info <- plot_info %>%
+  mutate(
+    bg = colors_tissue[TS], # Tissue colors
+    pch = ifelse(SEX == "Male", 21, ifelse(SEX == "Female", 24, 22))  # Shape: default for unknown
+  )
+
 
 matched_bgs <- plot_info$bg[match(colnames(dge.data), plot_info$SAMPID)]
 matched_pchs <- plot_info$pch[match(colnames(dge.data), plot_info$SAMPID)]
-matched_cols <- plot_info$col[match(colnames(dge.data), plot_info$SAMPID)]
-
-# Unique age groups and corresponding colors
-age_groups <- c("20-29", "30-39", "40-49", "50-59", "60-69", "70-79")
-age_colors <- c("#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#8C564B")
-
-# Sex symbols
-sex_symbols <- c(21, 24)
-sex_labels <- c("Male", "Female")
-
-# Tissue outline colors
-ts_groups <- c(tissue2, tissue1)
-ts_colors <- c("#000000","#FFFFFF")
+#matched_cols <- plot_info$col[match(colnames(dge.data), plot_info$SAMPID)]
 
 
-plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
-        cex=1.4, dim.plot=c(1,2))
+# Increase the right margin to make space for the legend
+par(mar=c(5, 4, 4, 8) + 0.1)  # Default is c(5, 4, 4, 2) + 0.1
 
-# Add a legend for Age groups
-legend("bottom",  # Places the legend in the top right corner of the plot
-       legend = age_groups,
-       fill = age_colors,
-       title = "Age",
-       cex = 0.8,
-       y.intersp = 0.7)  # Adjusts the size of the text in the legend
 
-# Add another legend for Sex
-legend("topleft",  # Places the legend in the bottom right corner of the plot
-       legend = sex_labels,
-       pch = sex_symbols,
-       title = "Sex",
-       cex = 0.8,
-       y.intersp = 0.7)
-# Add the last for TS
-legend("topright",  # Places the legend in the top left corner of the plot
-       legend = ts_groups,
-       col = ts_colors,
-       border = ts_colors,
-       fill = "#FFFFFF",
-       pch = 21,
-       title = "Tissue",
-       cex = 0.8,
-       y.intersp = 0.7)  # Adjusts the size of the text in the legend
 
 #plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
-#        cex=1.4, dim.plot=c(3,2))
+#        cex=1.4, dim.plot=c(1,2))
+
+plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,cex=1.4, 
+        dim.plot=c(1,2))
+ 
+# Adding a legend for Age outside the bottom of the plot
+#legend("topright", inset=c(-0.2, 0.2), title="Age", legend=levels(plot_info$AGE), fill=unique(plot_info$bg), cex=0.8, y.intersp=0.7, xpd=TRUE)
+# Adding a legend for Sex outside the top left of the plot
+legend("topright", inset=c(-0.2, 0), title="Sex", legend=levels(plot_info$SEX), pch=unique(plot_info$pch), cex=0.6, y.intersp=0.7, xpd=TRUE)
+# Adding a legend for Tissue outside the top right of the plot
+legend("bottomright", inset=c(-0.2, 0), title="Tissue", legend=levels(plot_info$TS), fill=unique(plot_info$bg), pch=21, cex=0.6, y.intersp=0.7, border=unique(plot_info$bg), xpd=TRUE)
+```
 
 ```
 We can see samples are well divided into 2 clusters by tissue. This plot could convince us of the correctness of the experiment and data.
@@ -286,7 +283,7 @@ ts.lrt <- glmLRT(fit,coef = paste("TS",tissue1,sep=''))
 
 # label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
-results$significant <- results$FDR < 0.05 & abs(results$logFC) > log2(1.5)
+results$significant <- results$FDR < 0.01 & abs(results$logFC) > log2(1)
 results$PValue <- pmax(results$PValue, 1e-300)  # replace exact 0s with a very small number
 
 results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Significant")
@@ -732,11 +729,11 @@ rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp(
 GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
 
 #list over-represented GO terms (p < 0.05)
-GO.out[GO.out$over_represented_pvalue < 0.0001,]
+GO.out[GO.out$over_represented_pvalue < 0.05,]
 
 #write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
 
-GO.out <- GO.out[GO.out$over_represented_pvalue < 0.0001,]
+GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
 
 # Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
 # Convert p-values to -log10 scale for better visualization
