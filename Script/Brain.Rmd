@@ -40,10 +40,10 @@ python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 
 
 ```{r}
 tissue1 <- 'Brain - Cortex'
-tissue2 <- 'Brain - Cerebellar Hemisphere'
+tissue2 <- 'Brain - Cerebellum'
 
 # Load count data
-#counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
+counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
 
 samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt")
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
@@ -61,7 +61,7 @@ tiss2.sampid <- samp.anno.data %>%
   filter(SMTSD==tissue2) %>% 
   select(SAMPID)
 
-counts.data <- counts.data.backup
+#counts.data <- counts.data.backup
 
 #ids <- tiss1.sampid %>% 
 #  bind_rows(tiss2.sampid) %>% 
@@ -202,7 +202,7 @@ legend("topright", inset=c(-0.2, 0), title="Sex", legend=levels(plot_info$SEX), 
 legend("bottomright", inset=c(-0.2, 0), title="Tissue", legend=levels(plot_info$TS), fill=unique(plot_info$bg), pch=21, cex=0.6, y.intersp=0.7, border=unique(plot_info$bg), xpd=TRUE)
 ```
 
-```
+
 We can see samples are well divided into 2 clusters by tissue. This plot could convince us of the correctness of the experiment and data.
 Randomly select 6 samples and plot them to check the effect of normalization
 ```{r}
@@ -283,7 +283,7 @@ ts.lrt <- glmLRT(fit,coef = paste("TS",tissue1,sep=''))
 
 # label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
-results$significant <- results$FDR < 0.01 & abs(results$logFC) > log2(1)
+results$significant <- results$FDR < 0.01 & abs(results$logFC) > log2(1.5)
 results$PValue <- pmax(results$PValue, 1e-300)  # replace exact 0s with a very small number
 
 results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Significant")
@@ -291,11 +291,11 @@ results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Sig
 ggplot(results, aes(x = logFC, y = -log10(PValue), col=significant)) +
   geom_point(alpha = 0.5) +
   geom_vline(xintercept = c(-log2(1.5),log2(1.5)), linetype="dashed",color="blue") +  # LogFC lines
-  geom_hline(yintercept = -log10(0.05),linetype = "dashed",color = "blue") +  # FDR lin
+  geom_hline(yintercept = -log10(0.01),linetype = "dashed",color = "blue") +  # FDR lin
   theme_minimal() +
   labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value", title = "Volcano Plot")
 # Summarize the number of differentially expressed genes
-summary(decideTestsDGE(ts.lrt,p.value=0.05,lfc=log2(1.5)))
+summary(decideTestsDGE(ts.lrt,p.value=0.01,lfc=log2(1.5)))
 
 ## Go enrichment analysis left to do here
 
@@ -407,10 +407,13 @@ clus_summary %>% ggplot(aes(x=sample_group, y=expression, group=gene_index)) + #
   coord_fixed(ratio=1) +
   theme(axis.text.x = element_text(angle = 90, size = 7, hjust = 1, vjust = 0))
 ```
+
 ```{r}
 #  Co-Expression
 ## Get DGEs (Tissue as variable)
 DEgenes <- topTags(ts.lrt,n = Inf,p.value = 0.01)$table
+DEgenes <- DEgenes[abs(DEgenes$logFC)>1,]
+
 voom_E_ts <- voom_E %>%
   filter(GeneID %in% rownames(DEgenes))
 
@@ -446,23 +449,7 @@ V(gene_graphMR10)$color <- colbar[compsMR10+1]                          #assign 
 plot(gene_graphMR10, layout = layout_with_fr, vertex.size = 4, vertex.label = NA, main="MR 10")
 ```
 
-```{r, include=FALSE, eval=FALSE}
-E_matrix_5 <- E_matrix_ts[11:15,]
-E_matrix_5_cor <- cor(t(E_matrix_5))
 
-diag(E_matrix_5_cor) <- 0
-
-
-E_matrix_5_rank <- apply(E_matrix_5_cor,2,function(x) rank(-abs(x)))
-E_matrix_5_rank
-
-E_matrix_5_MR <- sqrt(E_matrix_5_rank * t(E_matrix_5_rank))
-E_matrix_5_MR %>% round(3)
-
-genes_adj_MR2 <- E_matrix_5_MR <= 2
-diag(genes_adj_MR2) <- 0
-genes_adj_MR2
-```
 
 ```{r}
 # Graph stats for network comparison
@@ -543,7 +530,9 @@ MR10_DC <- MR10_DC[order(-MR10_DC$degree),]
 
 head(MR4_DC)
 head(MR10_DC)
+```
 
+```{r}
 gene_graphMR10 %>%
   betweenness() %>%
   sort(decreasing=TRUE) %>%
@@ -787,3 +776,35 @@ head(kegg_result)
 dotplot(kegg_result) + ggplot2::theme_minimal()
 ```
 
+```{r}
+# Convert Your Complete Gene List to Entrez IDs
+# Assuming genelist contains all expressed gene symbols
+all_entrez_ids <- unlist(mapIds(org.Hs.eg.db,
+                                keys = genelist,
+                                column = "ENTREZID",
+                                keytype = "SYMBOL",
+                                multiVals = "first"))
+all_entrez_ids <- all_entrez_ids[!is.na(all_entrez_ids)]  # Remove NAs
+
+# Convert Significantly Differentially Expressed Gene Symbols to Entrez IDs
+sig_genes <- rownames(DEgenes)  # Assuming these are your significantly differentially expressed genes
+sig_entrez_ids <- unlist(mapIds(org.Hs.eg.db,
+                                keys = sig_genes,
+                                column = "ENTREZID",
+                                keytype = "SYMBOL",
+                                multiVals = "first"))
+sig_entrez_ids <- sig_entrez_ids[!is.na(sig_entrez_ids)]  # Filter out NAs
+
+
+# Perform KEGG enrichment analysis
+kegg_result <- enrichKEGG(gene = sig_entrez_ids,
+                          universe = all_entrez_ids,
+                          organism = 'hsa',  # Assuming human genes
+                          keyType = 'ncbi-geneid')
+
+# Viewing the first few results
+head(kegg_result)
+
+# Optional: Visualize the results
+#dotplot(kegg_result) + ggplot2::theme_minimal()
+```
