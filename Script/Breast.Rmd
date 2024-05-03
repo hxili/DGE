@@ -42,14 +42,16 @@ python filter.py -f1 ../Input/gProfiler_hsapiens_12-11-2023_6-02-56\ AM.csv -f2 
 tissue1 <- 'Breast'
 
 # Load count data
-counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
+#counts.data <- read_tsv("../Input/GTEx_SLCs_gene_reads.gct")
 
 samp.anno.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt")
 subj.anno.ds.data <- read_tsv("../Input/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 counts.data <- counts.data[,-1]
 
 #counts.data.backup <- counts.data
-#counts.data <- counts.data.backup
+counts.data <- counts.data.backup
+
+genelist <- unique(counts.data$Description)
 
 select <- dplyr::select
 
@@ -84,10 +86,11 @@ missing_ids <- ids[!ids %in% colnames(counts.data)]
 #counts.data <- counts.data %>% 
 #  select(matches(ids))
 
-genelist <- counts.data$Description
+
 
 # For our subsequent analyses we want to reduce the data set to only those genes with some expression. In this case we will discard genes with no reads in >= 50 samples
 counts.data <- counts.data[rowSums(counts.data[,-1]==0)<50,]
+
 
 #cor.table <- cor(counts.data[,-1])
 #cor.table %>% gplots::heatmap.2(dendrogram="row", trace = "none", col=viridis::viridis(25, begin=.25), margins=c(7,8))
@@ -204,14 +207,14 @@ matched_bgs <- plot_info$bg[match(colnames(dge.data), plot_info$SAMPID)]
 
 
 # Increase the right margin to make space for the legend
-par(mar=c(5, 4, 4, 8) + 0.1)  # Default is c(5, 4, 4, 2) + 0.1
+par(mar=c(5, 4, 4, 2) + 0.1)  # Default is c(5, 4, 4, 2) + 0.1
 
 
 
 #plotMDS(dge.data,method="logFC",pch=matched_pchs,bg=matched_bgs,col=matched_cols,
 #        cex=1.4, dim.plot=c(1,2))
 
-plotMDS(dge.data,method="logFC",pch=21,bg=matched_bgs,cex=1.4, 
+plotMDS(dge.data,method="BCV",pch=21,bg=matched_bgs,cex=1.4, 
         dim.plot=c(1,2))
  
 # Adding a legend for Age outside the bottom of the plot
@@ -219,6 +222,8 @@ plotMDS(dge.data,method="logFC",pch=21,bg=matched_bgs,cex=1.4,
 # Adding a legend for Sex outside the top left of the plot
 #legend("topright", inset=c(-0.2, 0), title="Sex", legend=levels(plot_info$SEX), pch=unique(plot_info$pch), cex=0.6, y.intersp=0.7, xpd=TRUE)
 # Adding a legend for Tissue outside the top right of the plot
+legend("bottomleft", title="Sex", legend=levels(plot_info$SEX), fill=unique(plot_info$bg), pch=21, cex=0.6, y.intersp=0.7, border=unique(plot_info$bg))
+
 legend("bottomright", inset=c(-0.2, 0), title="Sex", legend=levels(plot_info$SEX), fill=unique(plot_info$bg), pch=21, cex=0.6, y.intersp=0.7, border=unique(plot_info$bg), xpd=TRUE)
 ```
 
@@ -361,7 +366,7 @@ ts.lrt <- glmLRT(fit,coef="SEX2")
 
 # label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
-results$significant <- results$FDR < 0.01 & abs(results$logFC) > log2(1)
+results$significant <- results$FDR < 0.05 & abs(results$logFC) > log2(1.5)
 results$PValue <- pmax(results$PValue, 1e-300)  # replace exact 0s with a very small number
 
 results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Significant")
@@ -377,6 +382,9 @@ summary(decideTestsDGE(ts.lrt,p.value=0.05,lfc=log2(1.5)))
 
 ## Go enrichment analysis left to do here
 
+## Get DGEs (Tissue as variable)
+DEgenes <- topTags(ts.lrt,n = Inf,p.value = 0.05)$table
+DEgenes <- DEgenes[abs(DEgenes$logFC)>log2(1.5),]
 ```
 
 
@@ -445,7 +453,7 @@ scores <- as.data.frame(prcomp_counts$x)[,c(1,2)]
 
 ## Get appropriate cluster number
 #set.seed(125)
-gap <- clusGap(E_matrix, FUN=kmeans, iter.max=10000, K.max=30, B=100)
+gap <- clusGap(E_matrix, FUN=kmeans, iter.max=10000, K.max=20, B=100)
 
 plot(gap, main = "Gap Statistic")
 
@@ -481,14 +489,13 @@ clus_summary <- clus %>% # average across replicates
 
 clus_summary %>% ggplot(aes(x=sample_group, y=expression, group=gene_index)) + # plot it
   geom_line(alpha=.15) +
-  facet_wrap(~cluster, ncol=4) +
+  facet_wrap(~cluster, ncol=3) +
   coord_fixed(ratio=1) +
   theme(axis.text.x = element_text(angle = 90, size = 7, hjust = 1, vjust = 0))
 ```
 ```{r}
 #  Co-Expression
-## Get DGEs (Tissue as variable)
-DEgenes <- topTags(ts.lrt,n = Inf,p.value = 0.01)$table
+
 voom_E_ts <- voom_E %>%
   filter(GeneID %in% rownames(DEgenes))
 
@@ -626,6 +633,11 @@ gene_graphMR10 %>%
   betweenness() %>%
   sort(decreasing=TRUE) %>%
   head(20)
+
+gene_graphMR4 %>%
+  betweenness() %>%
+  sort(decreasing=TRUE) %>%
+  head(20)
 ```
 
 ```{r}
@@ -681,7 +693,7 @@ nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
 
 #calculate p-values for each GO term
 rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp()
-GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
+GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:MF"))
 
 
 #list over-represented GO terms (p < 0.05)
@@ -712,133 +724,73 @@ treemap(GO.out,
         fontcolor.labels = "black",  # Font color for labels for better visibility
         fontface.labels = "bold"  # Font face for labels
 )
+
+
+GO.out$size <- abs(GO.out$logPvalue)  # 可以使用绝对值的logPvalue作为大小指标
+
+library(ggplotify)
+library(treemapify)
+
+# 绘制矩形树图
+p <- ggplot(GO.out, aes(area = size, fill = GO_domains, label = category)) +
+  geom_treemap() +
+  geom_treemap_text(fontface = "italic", colour = "white", place = "centre", grow = TRUE) +
+  scale_fill_manual(values = c("cellular_component" = "#1F77B4", "biological_process" = "#2CA02C","molecular_function"="#FF7F0E")) +
+  theme(legend.title = element_text(face = "bold"), legend.position = "right") +
+  labs(fill = "GO Domains")
+
+# 显示图形
+print(p)
 ```
+
 
 ```{r}
-##GO enrichment analysis of up-regulated genes
-#for each gene in expressed gene, return FALSE if it is not in DEgenes and TRUE if it is.
-over_expressed_genes <- DEgenes %>%
-  filter(logFC > 0)
-DE.ts <- expressed.genes.match$GeneID %in% rownames(over_expressed_genes)
+# Example genelist and DEgenes data
+# genelist <- counts.data$Description  # Already existing full gene list
+# DEgenes <- ...  # Assuming DEgenes is your list of differentially expressed genes
 
-names(DE.ts) <- expressed.genes.match$GeneID
-head(DE.ts)
+# Convert gene symbols to Entrez IDs for the full gene list
+all_entrez_ids <- unlist(mapIds(org.Hs.eg.db,
+                                keys = genelist,
+                                column = "ENTREZID",
+                                keytype = "SYMBOL",
+                                multiVals = "first"))
 
-DE.ts <- as.numeric(DE.ts) #convert to 0s and 1s
-head(DE.ts)
-sum(DE.ts) # number of DE genes
+# Filter to remove NAs
+all_entrez_ids <- all_entrez_ids[!is.na(all_entrez_ids)]
 
+# Convert DE gene symbols to Entrez IDs
+sig_entrez_ids <- unlist(mapIds(org.Hs.eg.db,
+                                keys = rownames(DEgenes),  # assuming rownames are gene symbols
+                                column = "ENTREZID",
+                                keytype = "SYMBOL",
+                                multiVals = "first"))
 
-#determines if there is bias due to gene length.  The plot shows the relationship.
-#library(goseq)
+# Filter to remove NAs
+sig_entrez_ids <- sig_entrez_ids[!is.na(sig_entrez_ids)]
 
-nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
-
-#calculate p-values for each GO term
-rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp()
-GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
-
-#list over-represented GO terms (p < 0.05)
-GO.out[GO.out$over_represented_pvalue < 0.05,]
-
-#write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
-
-GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
-
-# Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
-# Convert p-values to -log10 scale for better visualization
-GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
-
-# Create a TreeMap where each rectangle's size is based on the -log10 p-value (or any other measure of effect size you prefer)
-#library(treemap)
-#treemap(GO.out,
-#        index = "category",  # GO term identifiers
-#        vSize = "logPvalue",  # Value determining the size of the rectangles
-#        vColor = "logPvalue",  # Value determining the color gradient (optional)
-#        title = "Over-represented GO Terms in Up-regulated Genes",
-#        fontsize.title = 14,
-#        palette = "RdYlGn",  # Color palette
-#        border.col = "black",  # Border color
-#        fontcolor.labels = "black",  # Font color for labels
-#        fontface.labels = "bold"  # Font face for labels
-#)
+ego <- enrichGO(gene          = sig_entrez_ids,
+                universe      = all_entrez_ids,
+                OrgDb         = org.Hs.eg.db,
+                keyType       = "ENTREZID",
+                ont           = "ALL",  # Biological Process; use "CC" for Cellular Component, "MF" for Molecular Function
+                pAdjustMethod = "BH",
+                qvalueCutoff  = 1,
+                pvalueCutoff = 0.1,
+                readable      = TRUE)  # Convert ENTREZ IDs back to gene symbols for readability
 
 
-GO.out <- left_join(GO.out,go.domains,by="category")
 
+dotplot(ego) + ggplot2::ggtitle("GO Enrichment Analysis")
 
-domain_colors <- setNames(brewer.pal(length(unique(GO.out$GO_domains)), "Set3"), unique(GO.out$GO_domains))
-
-treemap(GO.out,
-        index = "category",  # GO term identifiers
-        vSize = "logPvalue",  # Value determining the size of the rectangles
-        vColor = "GO_domains",  # Assign color based on GO domains
-        title = "Over-represented GO Terms in Up-regulated Genes",
-        fontsize.title = 14,
-        palette = domain_colors,  # Custom color palette for GO domains
-        border.col = "black",  # Border color
-        fontcolor.labels = "black",  # Font color for labels for better visibility
-        fontface.labels = "bold"  # Font face for labels
-)
+barplot(ego,
+        x="Count",
+        color="p.adjust",
+        split="ONTOLOGY") +
+  facet_grid(ONTOLOGY~., scale='free')
 
 ```
 
-```{r}
-##GO enrichment analysis of up-regulated genes
-#for each gene in expressed gene, return FALSE if it is not in DEgenes and TRUE if it is.
-down_expressed_genes <- DEgenes %>%
-  filter(logFC < 0)
-DE.ts <- expressed.genes.match$GeneID %in% rownames(down_expressed_genes)
-
-names(DE.ts) <- expressed.genes.match$GeneID
-head(DE.ts)
-
-DE.ts <- as.numeric(DE.ts) #convert to 0s and 1s
-head(DE.ts)
-sum(DE.ts) # number of DE genes
-
-
-#determines if there is bias due to gene length.  The plot shows the relationship.
-#library(goseq)
-
-nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
-
-#calculate p-values for each GO term
-rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp()
-GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:BP"))
-
-#list over-represented GO terms (p < 0.05)
-GO.out[GO.out$over_represented_pvalue < 0.05,]
-
-#write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
-
-GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
-
-# Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
-# Convert p-values to -log10 scale for better visualization
-GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
-
-# Create a TreeMap where each rectangle's size is based on the -log10 p-value (or any other measure of effect size you prefer)
-#library(treemap)
-
-GO.out <- left_join(GO.out,go.domains,by="category")
-
-
-domain_colors <- setNames(brewer.pal(length(unique(GO.out$GO_domains)), "Set3"), unique(GO.out$GO_domains))
-
-treemap(GO.out,
-        index = "category",  # GO term identifiers
-        vSize = "logPvalue",  # Value determining the size of the rectangles
-        vColor = "lGO_domains",  # Assign color based on GO domains
-        title = "Down-represented GO Terms in Up-regulated Genes",
-        fontsize.title = 14,
-        palette = domain_colors,  # Custom color palette for GO domains
-        border.col = "black",  # Border color
-        fontcolor.labels = "black",  # Font color for labels for better visibility
-        fontface.labels = "bold"  # Font face for labels
-)
-
-```
 
 ```{r}
 #library(clusterProfiler)
@@ -865,3 +817,37 @@ head(kegg_result,30)
 dotplot(kegg_result) + ggplot2::theme_minimal()
 ```
 
+```{r}
+# Convert Your Complete Gene List to Entrez IDs
+# Assuming genelist contains all expressed gene symbols
+all_entrez_ids <- unlist(mapIds(org.Hs.eg.db,
+                                keys = genelist,
+                                column = "ENTREZID",
+                                keytype = "SYMBOL",
+                                multiVals = "first"))
+all_entrez_ids <- all_entrez_ids[!is.na(all_entrez_ids)]  # Remove NAs
+
+# Convert Significantly Differentially Expressed Gene Symbols to Entrez IDs
+sig_genes <- rownames(DEgenes)  # Assuming these are your significantly differentially expressed genes
+sig_entrez_ids <- unlist(mapIds(org.Hs.eg.db,
+                                keys = sig_genes,
+                                column = "ENTREZID",
+                                keytype = "SYMBOL",
+                                multiVals = "first"))
+sig_entrez_ids <- sig_entrez_ids[!is.na(sig_entrez_ids)]  # Filter out NAs
+
+
+# Perform KEGG enrichment analysis
+kegg_result <- enrichKEGG(gene = sig_entrez_ids,
+                          universe = all_entrez_ids,
+                          organism = 'hsa',  # Assuming human genes
+                          keyType = 'ncbi-geneid',
+                          qvalueCutoff  = 1,
+                          pvalueCutoff = 1)
+
+# Viewing the first few results
+head(kegg_result)
+
+# Optional: Visualize the results
+#dotplot(kegg_result) + ggplot2::theme_minimal()
+```
