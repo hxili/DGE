@@ -51,7 +51,7 @@ counts.data <- counts.data[,-1]
 #counts.data.backup <- counts.data
 counts.data <- counts.data.backup
 
-genelist <- unique(counts.data$Description)
+
 
 select <- dplyr::select
 
@@ -91,6 +91,7 @@ missing_ids <- ids[!ids %in% colnames(counts.data)]
 # For our subsequent analyses we want to reduce the data set to only those genes with some expression. In this case we will discard genes with no reads in >= 50 samples
 counts.data <- counts.data[rowSums(counts.data[,-1]==0)<50,]
 
+genelist <- unique(counts.data$Description)
 
 #cor.table <- cor(counts.data[,-1])
 #cor.table %>% gplots::heatmap.2(dendrogram="row", trace = "none", col=viridis::viridis(25, begin=.25), margins=c(7,8))
@@ -366,25 +367,25 @@ ts.lrt <- glmLRT(fit,coef="SEX2")
 
 # label genes with a FDR < 0.05 and a fold change > 1.5 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
-results$significant <- results$FDR < 0.05 & abs(results$logFC) > log2(1.5)
+results$significant <- results$FDR < 0.05 & abs(results$logFC) > log2(1.2)
 results$PValue <- pmax(results$PValue, 1e-300)  # replace exact 0s with a very small number
 
 results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Significant")
 
 ggplot(results, aes(x = logFC, y = -log10(PValue), col=significant)) +
   geom_point(alpha = 0.5) +
-  geom_vline(xintercept = c(-log2(1.5),log2(1.5)), linetype="dashed",color="blue") +  # LogFC lines
+  geom_vline(xintercept = c(-log2(1.2),log2(1.2)), linetype="dashed",color="blue") +  # LogFC lines
   geom_hline(yintercept = -log10(0.05),linetype = "dashed",color = "blue") +  # FDR lin
   theme_minimal() +
   labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value", title = "Volcano Plot")
 # Summarize the number of differentially expressed genes
-summary(decideTestsDGE(ts.lrt,p.value=0.05,lfc=log2(1.5)))
+summary(decideTestsDGE(ts.lrt,p.value=0.05,lfc=log2(1.2)))
 
 ## Go enrichment analysis left to do here
 
 ## Get DGEs (Tissue as variable)
 DEgenes <- topTags(ts.lrt,n = Inf,p.value = 0.05)$table
-DEgenes <- DEgenes[abs(DEgenes$logFC)>log2(1.5),]
+DEgenes <- DEgenes[abs(DEgenes$logFC)>log2(1.2),]
 ```
 
 
@@ -461,7 +462,7 @@ with(gap, maxSE(Tab[,"gap"], Tab[,"SE.sim"], method="firstSEmax"))
 
 # We now try 5 clusters
 set.seed(25)
-fit <- kmeans(E_matrix, 6)
+fit <- kmeans(E_matrix, 5)
 clus <- as.data.frame(fit$cluster)
 names(clus) <- paste("cluster")
 
@@ -686,6 +687,10 @@ head(DE.ts)
 sum(DE.ts) # number of DE genes
 
 
+```
+
+```{r, eval=FALSE}
+
 #determines if there is bias due to gene length.  The plot shows the relationship.
 #library(goseq)
 
@@ -792,30 +797,6 @@ barplot(ego,
 ```
 
 
-```{r}
-#library(clusterProfiler)
-#library(org.Hs.eg.db)
-
-sig_genes <- rownames(DEgenes)
-entrez_ids <- unlist(mapIds(org.Hs.eg.db,
-                            keys = sig_genes,
-                            column = "ENTREZID",
-                            keytype = "SYMBOL",
-                            multiVals = "first"))
-
-entrez_ids <- entrez_ids[!is.na(entrez_ids)]
-
-# Perform KEGG enrichment analysis
-kegg_result <- enrichKEGG(gene = entrez_ids,
-                          organism = 'hsa', # Assuming human genes
-                          keyType = 'ncbi-geneid')
-
-# Viewing the first few results
-head(kegg_result,30)
-
-# Optional: Visualize the results
-dotplot(kegg_result) + ggplot2::theme_minimal()
-```
 
 ```{r}
 # Convert Your Complete Gene List to Entrez IDs
@@ -849,5 +830,5 @@ kegg_result <- enrichKEGG(gene = sig_entrez_ids,
 head(kegg_result)
 
 # Optional: Visualize the results
-#dotplot(kegg_result) + ggplot2::theme_minimal()
+dotplot(kegg_result) + ggplot2::theme_minimal()
 ```

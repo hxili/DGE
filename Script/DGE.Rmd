@@ -55,7 +55,6 @@ counts.data <- counts.data[,-1]
 #counts.data.backup <- counts.data
 counts.data <- counts.data.backup
 
-genelist <- unique(counts.data$Description)
 
 select <- dplyr::select
 # Retrieve the count data of 2 among so many various tissues to analyse. Subsequent analysis should include all the data
@@ -91,6 +90,8 @@ missing_ids <- ids[!ids %in% colnames(counts.data)]
 
 # For our subsequent analyses we want to reduce the data set to only those genes with some expression. In this case we will discard genes with no reads in >= 50 samples
 counts.data <- counts.data[rowSums(counts.data[,-1]==0)<50,]
+
+genelist <- unique(counts.data$Description)
 
 #cor.table <- cor(counts.data[,-1])
 #cor.table %>% gplots::heatmap.2(dendrogram="row", trace = "none", col=viridis::viridis(25, begin=.25), margins=c(7,8))
@@ -132,7 +133,11 @@ dge.data <- DGEList(counts=counts.matrix,
  
 dge.data <- calcNormFactors(dge.data, method = "TMM")
 dge.data$samples
+```
 
+
+
+```{r}
 # Make a plot of the Biological Coefficient of Variation of each sample
 
 # Try to find out if sample can be divided by variables (i.e. TS, AGE, SEX)
@@ -291,7 +296,7 @@ ts.lrt <- glmLRT(fit,coef = paste("TS",tissue1,sep=''))
 
 # label genes with a FDR < 0.01 and a fold change > 2 and draw a volcano plot
 results <- topTags(ts.lrt, n=Inf)$table
-results$significant <- results$FDR < 0.05 & abs(results$logFC) > log2(1.5)
+results$significant <- results$FDR < 0.01 & abs(results$logFC) > log2(1.5)
 results$PValue <- pmax(results$PValue, 1e-300)  # replace exact 0s with a very small number
 
 results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Significant")
@@ -299,16 +304,16 @@ results$SignificanceLabel <- ifelse(results$significant, "Significant", "Not Sig
 ggplot(results, aes(x = logFC, y = -log10(PValue), col=significant)) +
   geom_point(alpha = 0.5) +
   geom_vline(xintercept = c(-log2(1.5),log2(1.5)), linetype="dashed",color="blue") +  # LogFC lines
-  geom_hline(yintercept = -log10(0.05),linetype = "dashed",color = "blue") +  # FDR lin
+  geom_hline(yintercept = -log10(0.01),linetype = "dashed",color = "blue") +  # FDR lin
   theme_minimal() +
   labs(x="Log2 Fold Change", y="-Log10 Adjusted P-value", title = "Volcano Plot")
 # Summarize the number of differentially expressed genes
-summary(decideTestsDGE(ts.lrt,p.value=0.05,lfc=log2(1.5)))
+summary(decideTestsDGE(ts.lrt,p.value=0.01,lfc=log2(1.5)))
 
 ## Go enrichment analysis left to do here
 
 ## Get DGEs (Tissue as variable)
-DEgenes <- topTags(ts.lrt,n = Inf,p.value = 0.05)$table
+DEgenes <- topTags(ts.lrt,n = Inf,p.value = 0.01)$table
 DEgenes <- DEgenes[abs(DEgenes$logFC)>log2(1.5),]
 ```
 
@@ -598,7 +603,9 @@ DE.ts <- as.numeric(DE.ts) #convert to 0s and 1s
 head(DE.ts)
 sum(DE.ts) # number of DE genes
 
+```
 
+```{r, eval=FALSE}
 #determines if there is bias due to gene length.  The plot shows the relationship.
 #library(goseq)
 
@@ -691,7 +698,7 @@ ego <- enrichGO(gene          = sig_entrez_ids,
                 ont           = "ALL",  # "BP" for Biological Process; use "CC" for Cellular Component, "MF" for Molecular Function, "ALL" for all
                 pAdjustMethod = "BH",
                 qvalueCutoff  = 1,
-                pvalueCutoff = 0.1,
+                pvalueCutoff = 1,
                 readable      = TRUE)  # Convert ENTREZ IDs back to gene symbols for readability
 
 
