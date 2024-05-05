@@ -342,7 +342,7 @@ voom_Et <- voom_Et[-1,-(ncol(voom_Et)-4):-(ncol(voom_Et)-1)] %>%
 
 mean_vals <- voom_Et %>%
   group_by(group) %>%
-  summarise(across(where(is.numeric), mean, na.rm = TRUE))
+  summarise(across(where(is.numeric), ~mean(., trim=0, na.rm=TRUE)))
  
 mean_vals_t <- mean_vals %>% 
   t()
@@ -354,10 +354,21 @@ mean_vals_t <- mean_vals_t[-1,] %>%
 
 mean_vals_t
 
+mean_vals_t <- mean_vals_t[rownames(DEgenes),]
+
 E_matrix <- mean_vals_t %>%
   as.matrix() %>% 
   scale() # scale and center the data so that each gene has a mean of 0 and a standard deviation of 1. This prevents genes with high expression from having an undue influence on our results
+
+
+
+E_matrix <- E_matrix %>%
+  t() %>% 
+  scale() %>% 
+  t()
+
 gene_hclust_row <- E_matrix %>% dist() %>% hclust()
+ggdendrogram(gene_hclust_row)
 
 gene_hclust_col <- E_matrix %>% t()  %>% dist() %>% hclust()
 ggdendrogram(gene_hclust_col)
@@ -368,9 +379,30 @@ ggdendrogram(gene_hclust_col)
 
 #plot(fit, print.num=FALSE) # dendogram with p-values
 
-heatmap.2(E_matrix, Rowv = as.dendrogram(gene_hclust_col),  density.info="none", 
-          trace="none", margins = c(20,10))
 
+
+col_bar <- data.frame(Gender=factor(c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),levels=c(1,2), labels=c("Male", "Female")),row.names=colnames(E_matrix))
+
+row_bar <- DEgenes %>% 
+  mutate(Expression_Change=ifelse(logFC>=0,'Upregulated','Downregulated')) %>% 
+  select(Expression_Change) %>% 
+  mutate(Expression_Change=factor(Expression_Change, levels = unique(Expression_Change)))
+
+
+
+pheatmap(E_matrix, color=cols, annotation_col = col_bar, annotation_row = row_bar)
+pheatmap(E_matrix, color=cols, annotation_row = row_bar)
+
+cols <- colorRampPalette(brewer.pal(10, "RdBu"))(256)
+
+col_bar <- brewer.pal(3, "Set1")[col_bar$Gender]
+row_bar <- brewer.pal(2, "Set2")[row_bar$Expression_Change]
+
+heatmap.2(E_matrix, Rowv = as.dendrogram(gene_hclust_row), Colv = as.dendrogram(gene_hclust_col), density.info="none", 
+          trace="none", margins = c(20,10), col=rev(cols), key.title="Row Z-score", ColSideColors=col_bar, RowSideColors = row_bar)
+
+heatmap.2(E_matrix, Rowv = as.dendrogram(gene_hclust_row), Colv = as.dendrogram(gene_hclust_col), density.info="none", 
+          trace="none", margins = c(20,10), col=rev(cols), key.title="Row Z-score", RowSideColors = row_bar)
 ```
 
 
@@ -605,66 +637,7 @@ sum(DE.ts) # number of DE genes
 
 ```
 
-```{r, eval=FALSE}
-#determines if there is bias due to gene length.  The plot shows the relationship.
-#library(goseq)
 
-nullp.result <- nullp(DEgenes = DE.ts, bias.data = gene.lengths.vector)
-
-#calculate p-values for each GO term
-rownames(nullp.result) <- names(gene.lengths.vector) #because of a bug in nullp()
-GO.out <- goseq(pwf = nullp.result,gene2cat = go.list,test.cats=("GO:CC"))
-
-
-#list over-represented GO terms (p < 0.05)
-GO.out[GO.out$over_represented_pvalue < 0.05,]
-
-#write.table(GO.out[GO.out$over_represented_pvalue < 0.05,1:2],row.names=FALSE,file="../Output/GO_terms.txt", quote = FALSE,col.names = FALSE)
-
-GO.out <- GO.out[GO.out$over_represented_pvalue < 0.05,]
-
-# Assuming GO.out has 'category' for GO term IDs and 'over_represented_pvalue' for significance
-# Convert p-values to -log10 scale for better visualization
-GO.out$logPvalue <- -log10(GO.out$over_represented_pvalue)
-
-GO.out <- left_join(GO.out,go.domains,by="category")
-
-
-
-# 定义颜色映射为十六进制颜色值
-domain_colors <- c("cellular_component" = "#FF7F0E",  # 蓝色的十六进制代码
-                   "biological_process" = "#2CA02C")  # 绿色的十六进制代码
-
-# 使用定义的颜色映射绘制treemap
-treemap(GO.out,
-        index = "category",
-        vSize = "logPvalue",
-        vColor = "GO_domains",
-        title = "Over-represented GO Terms in DE Genes",
-        fontsize.title = 14,
-        border.col = "black",
-        fontcolor.labels = "black",
-        fontface.labels = "bold",
-        palette = domain_colors  # 应用颜色映射
-)
-#1F77B4", "#FF7F0E", "#2CA02C
-library(ggplotify)
-library(treemapify)
-# 准备数据
-GO.out$size <- abs(GO.out$logPvalue)  # 可以使用绝对值的logPvalue作为大小指标
-
-# 绘制矩形树图
-p <- ggplot(GO.out, aes(area = size, fill = GO_domains, label = category)) +
-  geom_treemap() +
-  geom_treemap_text(fontface = "italic", colour = "white", place = "centre", grow = TRUE) +
-  scale_fill_manual(values = c("cellular_component" = "#1F77B4", "biological_process" = "#2CA02C","molecular_function"="#FF7F0E")) +
-  theme(legend.title = element_text(face = "bold"), legend.position = "right") +
-  labs(fill = "GO Domains")
-
-# 显示图形
-print(p)
-
-```
 
 ```{r}
 # Example genelist and DEgenes data
@@ -713,30 +686,6 @@ barplot(ego,
 ```
 
 
-```{r}
-#library(clusterProfiler)
-#library(org.Hs.eg.db)
-
-sig_genes <- rownames(DEgenes)
-entrez_ids <- unlist(mapIds(org.Hs.eg.db,
-                            keys = sig_genes,
-                            column = "ENTREZID",
-                            keytype = "SYMBOL",
-                            multiVals = "first"))
-
-entrez_ids <- entrez_ids[!is.na(entrez_ids)]
-
-# Perform KEGG enrichment analysis
-kegg_result <- enrichKEGG(gene = entrez_ids,
-                          organism = 'hsa', # Assuming human genes
-                          keyType = 'ncbi-geneid')
-
-# Viewing the first few results
-head(kegg_result,30)
-
-# Optional: Visualize the results
-dotplot(kegg_result) + ggplot2::theme_minimal()
-```
 
 ```{r}
 # Convert Your Complete Gene List to Entrez IDs
